@@ -2,7 +2,7 @@ use bevy::{
     log::{Level, LogPlugin},
     prelude::*,
 };
-use example::{NewPhysicsBox, PhysicsScheme, networking::StreamHeader};
+use example::{NewPhysicsBox, PhysicsScheme};
 use nevy::*;
 use nevy_prediction::server::*;
 
@@ -31,11 +31,6 @@ fn main() {
 
     app.add_systems(Startup, spawn_boxes);
 
-    app.add_systems(
-        Update,
-        init_new_boxes.in_set(SchemeUpdateSet::<PhysicsScheme>::SendUpdates),
-    );
-
     app.run();
 }
 
@@ -44,25 +39,4 @@ struct PhysicsBox;
 
 fn spawn_boxes(mut commands: Commands) {
     commands.spawn(PhysicsBox);
-}
-
-fn init_new_boxes(
-    pairs: InitializePairs<PhysicsBox>,
-    mut messages: SharedMessageSender<UpdateSender<PhysicsScheme>>,
-    message_id: Res<MessageId<WorldUpdate<PhysicsScheme, NewPhysicsBox>>>,
-) -> Result {
-    // debug!("Sending updates");
-    for (client_entity, box_entity) in pairs.iter() {
-        messages.write(
-            StreamHeader::Messages,
-            client_entity,
-            *message_id,
-            true,
-            &WorldUpdate::new(NewPhysicsBox {
-                entity: box_entity.into(),
-            }),
-        )?;
-    }
-
-    Ok(())
 }

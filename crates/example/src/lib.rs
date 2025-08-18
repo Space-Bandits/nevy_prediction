@@ -1,26 +1,23 @@
-use bevy::prelude::*;
-use nevy_prediction::common::*;
+use std::time::Duration;
+
+use bevy::{ecs::entity::MapEntities, prelude::*};
+use nevy_prediction::common::{
+    scheme::{PredictionScheme, SchemeWorldUpdates},
+    *,
+};
 use serde::{Deserialize, Serialize};
 
-use crate::networking::StreamHeader;
+use crate::{networking::StreamHeader, simulation::SimulationPlugin};
 
 pub mod networking;
+pub mod scheme;
+pub mod simulation;
 
 /// common logic for the server and client apps
 pub fn build(app: &mut App) {
     networking::build(app);
-}
 
-pub struct PhysicsScheme;
-
-impl PredictionScheme for PhysicsScheme {
-    fn updates() -> SchemeWorldUpdates<Self> {
-        SchemeWorldUpdates::default().with_message::<NewPhysicsBox>()
-    }
-
-    fn message_header() -> impl Into<u16> {
-        StreamHeader::Messages
-    }
+    // app.add_plugins(plugins)
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -36,9 +33,4 @@ impl From<Entity> for ServerEntity {
     fn from(value: Entity) -> Self {
         ServerEntity(value)
     }
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct NewPhysicsBox {
-    pub entity: ServerEntity,
 }
