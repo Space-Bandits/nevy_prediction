@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use bevy::{ecs::schedule::ScheduleLabel, prelude::*, tasks::Task};
 
-use crate::common::simulation::SimulationStepPlugin;
+use crate::common::simulation::SimulationPlugin;
 
 pub struct PredictionApp {
     state: PredictionAppState,
@@ -20,7 +20,7 @@ impl PredictionApp {
         app.add_schedule(Schedule::new(Main));
         app.main_mut().update_schedule = Some(Main.intern());
 
-        app.add_plugins(SimulationStepPlugin {
+        app.add_plugins(SimulationPlugin {
             schedule: Main.intern(),
             step_interval,
         });

@@ -9,7 +9,7 @@ use nevy::*;
 use crate::common::{
     UpdateServerTime,
     scheme::PredictionScheme,
-    simulation::{SimulationStepPlugin, SimulationTime, StepSimulation, UpdateQueue, WorldUpdate},
+    simulation::{SimulationPlugin, SimulationTime, StepSimulation, UpdateQueue, WorldUpdate},
 };
 
 pub struct NevyPredictionServerPlugin<S> {
@@ -47,7 +47,7 @@ where
                 .chain(),
         );
 
-        app.add_plugins(SimulationStepPlugin {
+        app.add_plugins(SimulationPlugin {
             schedule: self.schedule,
             step_interval: S::step_interval(),
         });

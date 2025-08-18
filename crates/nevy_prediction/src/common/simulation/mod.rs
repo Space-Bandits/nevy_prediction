@@ -27,7 +27,7 @@ pub struct StepSimulation;
 
 /// This resource is used to control how far [SimulationTime] is advanced to.
 ///
-/// [SimulationStepPlugin] will advance [SimulationTime] up to this point whenever it's schedule runs.
+/// [SimulationPlugin] will advance [SimulationTime] up to this point whenever it's schedule runs.
 #[derive(Resource, Default)]
 pub struct SimulationTimeTarget(pub Duration);
 
@@ -36,15 +36,16 @@ pub struct SimulationTimeTarget(pub Duration);
 struct SimulationStepInterval(Duration);
 
 /// Controls the execution of the [SimulationSchedule] and [SimulationTime].
-pub(crate) struct SimulationStepPlugin {
+pub(crate) struct SimulationPlugin {
     pub schedule: Interned<dyn ScheduleLabel>,
     pub step_interval: Duration,
 }
 
-impl Plugin for SimulationStepPlugin {
+impl Plugin for SimulationPlugin {
     fn build(&self, app: &mut App) {
-        let simulation_schedule = Schedule::new(SimulationSchedule);
-        app.add_schedule(simulation_schedule);
+        app.add_schedule(Schedule::new(SimulationSchedule));
+
+        simulation_entity::build(app);
 
         app.init_resource::<Time<SimulationTime>>();
         app.init_resource::<SimulationTimeTarget>();
