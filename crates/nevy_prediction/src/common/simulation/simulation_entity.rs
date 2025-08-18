@@ -5,4 +5,4 @@ use bevy::prelude::*;
 pub struct SimulationEntity(Entity);
 
 #[derive(Resource)]
-pub(crate) enum SimulationEntityMap {}aqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqaqaa aq
+pub(crate) enum SimulationEntityMap {}
