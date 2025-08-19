@@ -37,6 +37,6 @@ pub(crate) struct UpdateServerTime {
 
 /// Server -> Client message to apply an update to the simulation world at a certain time.
 #[derive(Serialize, Deserialize)]
-pub(crate) struct ServerWorldUpdate<T> {
-    pub update: WorldUpdate<T>,
+pub struct ServerWorldUpdate<T> {
+    pub(crate) update: WorldUpdate<T>,
 }

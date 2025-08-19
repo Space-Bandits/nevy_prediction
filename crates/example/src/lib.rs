@@ -1,13 +1,5 @@
-use std::time::Duration;
-
-use bevy::{ecs::entity::MapEntities, prelude::*};
-use nevy_prediction::common::{
-    scheme::{PredictionScheme, SchemeWorldUpdates},
-    *,
-};
+use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
-
-use crate::{networking::StreamHeader, simulation::SimulationPlugin};
 
 pub mod networking;
 pub mod scheme;

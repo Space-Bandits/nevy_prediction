@@ -2,8 +2,7 @@ use bevy::{
     log::{Level, LogPlugin},
     prelude::*,
 };
-use example::PhysicsScheme;
-use nevy::*;
+use example::scheme::PhysicsScheme;
 use nevy_prediction::client::*;
 
 use crate::networking::ClientConnection;

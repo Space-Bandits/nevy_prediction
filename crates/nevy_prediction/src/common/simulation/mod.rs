@@ -1,10 +1,12 @@
-use std::{collections::VecDeque, time::Duration};
+use std::{collections::VecDeque, marker::PhantomData, time::Duration};
 
 use bevy::{
     ecs::{entity::MapEntities, intern::Interned, schedule::ScheduleLabel, system::SystemParam},
     prelude::*,
 };
 use serde::{Deserialize, Serialize};
+
+use crate::common::scheme::PredictionScheme;
 
 pub mod simulation_entity;
 
@@ -28,31 +30,51 @@ pub struct StepSimulation;
 /// This resource is used to control how far [SimulationTime] is advanced to.
 ///
 /// [SimulationPlugin] will advance [SimulationTime] up to this point whenever it's schedule runs.
-#[derive(Resource, Default)]
+#[derive(Resource, Default, Deref, DerefMut)]
 pub struct SimulationTimeTarget(pub Duration);
 
 /// Controls the fixed timestep of [SimulationTime]
-#[derive(Resource)]
+#[derive(Resource, Deref)]
 struct SimulationStepInterval(Duration);
 
+/// This plugin is added to all instances of the simulation.
+///
 /// Controls the execution of the [SimulationSchedule] and [SimulationTime].
-pub(crate) struct SimulationPlugin {
+pub(crate) struct SimulationPlugin<S> {
+    pub _p: PhantomData<S>,
     pub schedule: Interned<dyn ScheduleLabel>,
-    pub step_interval: Duration,
 }
 
-impl Plugin for SimulationPlugin {
+impl<S> Plugin for SimulationPlugin<S>
+where
+    S: PredictionScheme,
+{
     fn build(&self, app: &mut App) {
         app.add_schedule(Schedule::new(SimulationSchedule));
 
         simulation_entity::build(app);
 
+        app.init_resource::<Time>();
+        debug!("inserting simulation time");
         app.init_resource::<Time<SimulationTime>>();
         app.init_resource::<SimulationTimeTarget>();
-        app.insert_resource(SimulationStepInterval(self.step_interval));
+        app.insert_resource(SimulationStepInterval(S::step_interval()));
 
         app.add_systems(self.schedule, run_simulation_schedule);
+
+        app.add_plugins(S::plugin());
+
+        for update in S::updates().0 {
+            update.build_simulation(app);
+        }
     }
+}
+
+pub(crate) fn build_update<T>(app: &mut App)
+where
+    T: Send + Sync + 'static,
+{
+    app.init_resource::<UpdateQueue<T>>();
 }
 
 /// Advances [SimulationTime] and the [SimulationSchedule].
@@ -92,6 +114,14 @@ pub(crate) struct WorldUpdate<T> {
 #[derive(Resource)]
 pub(crate) struct UpdateQueue<T> {
     pub updates: VecDeque<WorldUpdate<T>>,
+}
+
+impl<T> Default for UpdateQueue<T> {
+    fn default() -> Self {
+        Self {
+            updates: VecDeque::new(),
+        }
+    }
 }
 
 impl<T> UpdateQueue<T> {

@@ -23,7 +23,8 @@ pub trait PredictionScheme: Send + Sync + 'static {
 
 /// Defines a list of updates that can modify the predicted world.
 ///
-/// Modifying the predicted world must be done exclusively through these updates.
+/// World updates provide a way of recording changes to the predicted world.
+/// This is used for prediction, reconciliation and initializing and updating client side worlds.
 pub struct SchemeWorldUpdates(pub(crate) Vec<Box<dyn SchemeUpdate>>);
 
 pub(crate) trait SchemeUpdate {
@@ -32,6 +33,8 @@ pub(crate) trait SchemeUpdate {
     fn build_client(&self, app: &mut App, schedule: Interned<dyn ScheduleLabel>);
 
     fn build_server(&self, app: &mut App, schedule: Interned<dyn ScheduleLabel>);
+
+    fn build_simulation(&self, app: &mut App);
 }
 
 impl<T> SchemeUpdate for PhantomData<T>
@@ -43,11 +46,15 @@ where
     }
 
     fn build_client(&self, app: &mut App, schedule: Interned<dyn ScheduleLabel>) {
-        // crate::client::build_update::<T>(app, schedule);
+        crate::client::build_update::<T>(app, schedule);
     }
 
     fn build_server(&self, app: &mut App, schedule: Interned<dyn ScheduleLabel>) {
         crate::server::build_update::<T>(app, schedule);
+    }
+
+    fn build_simulation(&self, app: &mut App) {
+        crate::common::simulation::build_update::<T>(app);
     }
 }
 

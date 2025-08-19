@@ -1,5 +1,10 @@
+use std::time::Duration;
+
 use bevy::{ecs::entity::MapEntities, prelude::*};
-use nevy_prediction::common::scheme::{PredictionScheme, SchemeWorldUpdates};
+use nevy_prediction::common::{
+    scheme::{PredictionScheme, SchemeWorldUpdates},
+    simulation::simulation_entity::SimulationEntity,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{networking::StreamHeader, simulation::SimulationPlugin};
@@ -18,9 +23,13 @@ impl PredictionScheme for PhysicsScheme {
     fn plugin() -> impl Plugin {
         SimulationPlugin
     }
+
+    fn step_interval() -> Duration {
+        Duration::from_millis(200)
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, MapEntities)]
 pub struct NewPhysicsBox {
-    pub entity: Entity,
+    pub entity: SimulationEntity,
 }

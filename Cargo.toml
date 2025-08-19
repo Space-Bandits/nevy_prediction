@@ -1,6 +1,6 @@
 [workspace]
 members = ["crates/*"]
-resolver = "1"
+resolver = "2"
 
 [workspace.dependencies]
 bevy = { version = "0.16", default-features = false }
