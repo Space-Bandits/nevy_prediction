@@ -1,5 +1,6 @@
 use bevy::{
     app::PluginsState,
+    ecs::schedule::ScheduleLabel,
     prelude::*,
     tasks::{AsyncComputeTaskPool, Task, block_on, poll_once},
 };
@@ -62,3 +63,11 @@ async fn run_parallel_app(mut app: App) -> Result<App> {
 
     Ok(app)
 }
+
+/// Schedule that extracts the simulation state from a [SourceWorld] into the current world.
+#[derive(ScheduleLabel, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ExtractSimulation;
+
+/// Holds the source world during the [ExtractSimulation] schedule.
+#[derive(Resource, Deref, DerefMut)]
+pub struct SourceWorld(pub World);
