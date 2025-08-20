@@ -11,8 +11,8 @@ use crate::common::{
     UpdateServerTime,
     scheme::PredictionScheme,
     simulation::{
-        SimulationPlugin, SimulationSchedule, SimulationTime, SimulationTimeTarget, StepSimulation,
-        WorldUpdate,
+        SimulationInstance, SimulationPlugin, SimulationSchedule, SimulationTime,
+        SimulationTimeTarget, StepSimulation, WorldUpdate,
     },
 };
 
@@ -73,6 +73,7 @@ where
         app.add_plugins(SimulationPlugin::<S> {
             _p: PhantomData,
             schedule: self.schedule,
+            instance: SimulationInstance::Server,
         });
 
         app.configure_sets(

@@ -22,7 +22,7 @@ impl ParallelApp {
         ParallelApp::Idle(app)
     }
 
-    pub fn run(&mut self) {
+    pub fn update(&mut self) {
         let ParallelApp::Idle(app) = self else {
             return;
         };

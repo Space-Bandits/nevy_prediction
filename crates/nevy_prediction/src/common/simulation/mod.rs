@@ -21,7 +21,7 @@ pub struct SimulationSchedule;
 /// Wherever the simulatin runs this is the generic time resource.
 ///
 /// When outside of [SimulationSchedule] this time resource will contain the time of the next simulation step.
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct SimulationTime;
 
 #[derive(SystemSet, Clone, Copy, Default, Debug, PartialEq, Eq, Hash)]
@@ -37,12 +37,22 @@ pub struct SimulationTimeTarget(pub Duration);
 #[derive(Resource, Deref)]
 struct SimulationStepInterval(Duration);
 
+/// A resource that exists to inform the simulation where it is running.
+#[derive(Resource, Clone, Copy, Debug)]
+pub enum SimulationInstance {
+    Server,
+    ClientMain,
+    ClientServerWorld,
+    ClientPrediction,
+}
+
 /// This plugin is added to all instances of the simulation.
 ///
 /// Controls the execution of the [SimulationSchedule] and [SimulationTime].
 pub(crate) struct SimulationPlugin<S> {
     pub _p: PhantomData<S>,
     pub schedule: Interned<dyn ScheduleLabel>,
+    pub instance: SimulationInstance,
 }
 
 impl<S> Plugin for SimulationPlugin<S>
@@ -50,6 +60,8 @@ where
     S: PredictionScheme,
 {
     fn build(&self, app: &mut App) {
+        app.insert_resource(self.instance);
+
         app.add_schedule(Schedule::new(SimulationSchedule));
 
         simulation_entity::build(app);

@@ -8,11 +8,13 @@ use bevy::{
 use crate::common::scheme::PredictionScheme;
 
 pub mod parallel_app;
+pub mod prediction_app;
 pub mod server_world_app;
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ClientPredictionSet {
-    ReceiveUpdates,
+    QueueUpdates,
+    RunPredictionWorld,
     RunServerWorld,
 }
 
@@ -38,7 +40,8 @@ where
         app.configure_sets(
             self.schedule,
             (
-                ClientPredictionSet::ReceiveUpdates,
+                ClientPredictionSet::QueueUpdates,
+                ClientPredictionSet::RunPredictionWorld,
                 ClientPredictionSet::RunServerWorld,
             )
                 .chain(),
@@ -46,6 +49,7 @@ where
 
         crate::common::build::<S>(app);
         server_world_app::build::<S>(app, self.schedule);
+        prediction_app::build::<S>(app, self.schedule);
 
         for update in S::updates().0 {
             update.build_client(app, self.schedule);

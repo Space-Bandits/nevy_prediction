@@ -11,7 +11,9 @@ use crate::{
     common::{
         ServerWorldUpdate, UpdateServerTime,
         scheme::PredictionScheme,
-        simulation::{SimulationPlugin, SimulationTime, SimulationTimeTarget, UpdateQueue},
+        simulation::{
+            SimulationInstance, SimulationPlugin, SimulationTime, SimulationTimeTarget, UpdateQueue,
+        },
     },
 };
 
@@ -24,7 +26,7 @@ where
     app.add_systems(
         schedule,
         (
-            receive_time_updates.in_set(ClientPredictionSet::ReceiveUpdates),
+            receive_time_updates.in_set(ClientPredictionSet::QueueUpdates),
             run_server_world.in_set(ClientPredictionSet::RunServerWorld),
         ),
     );
@@ -53,6 +55,7 @@ impl ServerWorldApp {
         app.add_plugins(SimulationPlugin::<S> {
             _p: PhantomData,
             schedule: Main.intern(),
+            instance: SimulationInstance::ClientServerWorld,
         });
 
         ServerWorldApp(ParallelApp::new(app))
@@ -112,7 +115,7 @@ fn run_server_world(mut server_app: NonSendMut<ServerWorldApp>) -> Result {
     let target_time = **app.world().resource::<SimulationTimeTarget>();
 
     if target_time > current_time {
-        server_app.run();
+        server_app.update();
     }
 
     Ok(())

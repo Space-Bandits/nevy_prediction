@@ -1,17 +1,37 @@
 use bevy::{platform::collections::HashMap, prelude::*};
 use serde::{Deserialize, Serialize};
 
+use crate::client::parallel_app::{ExtractSimulation, SourceWorld};
+
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ExtractSimulationEntities;
+
 pub fn build(app: &mut App) {
     app.init_resource::<SimulationEntityMap>();
 
     app.add_observer(add_simulation_entity);
     app.add_observer(remove_simulation_entity);
+
+    app.add_systems(
+        ExtractSimulation,
+        (
+            mark_removed_simulation_entities,
+            extract_simulation_entities,
+            despawn_removed_simulation_entities,
+        )
+            .chain()
+            .in_set(ExtractSimulationEntities),
+    );
 }
 
-/// This component exists on an entity that entity that belongs to the server's simulation instance.
-/// [SimulationEntityMap] can be used to find which entity has a given id.
+/// This component is a unique id that can be used to map entities across all instances of the simulation.
 ///
-/// This component is provided as a utility for having a consistent id for simulation entities across all instances of a simulation.
+/// Use this component in your world updates and when extracting data between simulation instances.
+///
+/// Entities with this component will be automatically spawned and despawned
+/// during the [ExtractSimulation] schedule in the [ExtractSimulationEntities] system set.
+/// You can then utilize the [SimulationEntityMap] from the current world to find which [SimulationEntity]
+/// in the current world belongs to a [SimulationEntity] in the [SourceWorld].
 #[derive(Component, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[component(immutable)]
 pub struct SimulationEntity(pub u64);
@@ -54,4 +74,45 @@ fn remove_simulation_entity(
     map.map.remove(&simulation_entity);
 
     Ok(())
+}
+
+#[derive(Component)]
+#[component(storage = "SparseSet")]
+pub struct RemovedSimulationEntity;
+
+fn mark_removed_simulation_entities(
+    mut commands: Commands,
+    entity_q: Query<Entity, With<SimulationEntity>>,
+) {
+    for entity in &entity_q {
+        commands.entity(entity).insert(RemovedSimulationEntity);
+    }
+}
+
+fn extract_simulation_entities(
+    mut commands: Commands,
+    map: Res<SimulationEntityMap>,
+    mut entity_q: Local<Option<QueryState<&SimulationEntity>>>,
+    mut source_world: ResMut<SourceWorld>,
+) {
+    let entity_q = entity_q.get_or_insert_with(|| source_world.query());
+
+    for &simulation_entity in entity_q.iter(&*source_world) {
+        if let Some(local_entity) = map.get(simulation_entity) {
+            commands
+                .entity(local_entity)
+                .remove::<RemovedSimulationEntity>();
+        } else {
+            commands.spawn(simulation_entity);
+        }
+    }
+}
+
+fn despawn_removed_simulation_entities(
+    mut commands: Commands,
+    entity_q: Query<Entity, With<RemovedSimulationEntity>>,
+) {
+    for entity in &entity_q {
+        commands.entity(entity).despawn();
+    }
 }
