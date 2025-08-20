@@ -21,7 +21,7 @@ impl Plugin for SimulationPlugin {
 
         app.add_systems(
             ExtractSimulation,
-            extract_boxes.after(ExtractSimulationEntities),
+            (log_extracts, extract_boxes.after(ExtractSimulationEntities)),
         );
     }
 }
@@ -31,6 +31,14 @@ fn log_simulation_time(time: Res<Time>, instance: Res<SimulationInstance>) {
         "simulation: {:?} time: {}",
         *instance,
         time.elapsed().as_millis()
+    );
+}
+
+fn log_extracts(source_world: Res<SourceWorld>, instance: Res<SimulationInstance>) {
+    debug!(
+        "Extracting {:?} -> {:?}",
+        *source_world.resource::<SimulationInstance>(),
+        *instance
     );
 }
 

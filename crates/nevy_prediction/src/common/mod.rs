@@ -14,6 +14,7 @@ pub(crate) fn build<S>(app: &mut App)
 where
     S: PredictionScheme,
 {
+    app.add_message::<ResetSimulation>();
     app.add_message::<UpdateServerTime>();
 
     for update in S::updates().0 {
@@ -27,6 +28,12 @@ where
     T: Serialize + DeserializeOwned + Send + Sync + 'static,
 {
     app.add_message::<ServerWorldUpdate<T>>();
+}
+
+/// Server -> Client message to reset the simulation before sending updates
+#[derive(Serialize, Deserialize)]
+pub(crate) struct ResetSimulation {
+    pub simulation_time: Duration,
 }
 
 /// Server -> Client message to update the current simulation time on the server.

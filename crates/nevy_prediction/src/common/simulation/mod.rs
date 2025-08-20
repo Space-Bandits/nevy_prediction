@@ -24,6 +24,7 @@ pub struct SimulationSchedule;
 #[derive(Default, Clone)]
 pub struct SimulationTime;
 
+/// System set where [SimulationSchedule] is run.
 #[derive(SystemSet, Clone, Copy, Default, Debug, PartialEq, Eq, Hash)]
 pub struct StepSimulation;
 
@@ -72,7 +73,10 @@ where
         app.init_resource::<SimulationTimeTarget>();
         app.insert_resource(SimulationStepInterval(S::step_interval()));
 
-        app.add_systems(self.schedule, run_simulation_schedule);
+        app.add_systems(
+            self.schedule,
+            run_simulation_schedule.in_set(StepSimulation),
+        );
 
         app.add_plugins(S::plugin());
 

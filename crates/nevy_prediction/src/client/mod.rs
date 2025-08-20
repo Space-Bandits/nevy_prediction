@@ -5,7 +5,10 @@ use bevy::{
     prelude::*,
 };
 
-use crate::common::scheme::PredictionScheme;
+use crate::common::{
+    scheme::PredictionScheme,
+    simulation::{SimulationInstance, SimulationPlugin, SimulationTimeTarget},
+};
 
 pub mod parallel_app;
 pub mod prediction_app;
@@ -51,6 +54,14 @@ where
         server_world_app::build::<S>(app, self.schedule);
         prediction_app::build::<S>(app, self.schedule);
 
+        app.add_plugins(SimulationPlugin::<S> {
+            _p: PhantomData,
+            schedule: Update.intern(),
+            instance: SimulationInstance::ClientMain,
+        });
+
+        app.add_systems(Update, drive_simulation_time);
+
         for update in S::updates().0 {
             update.build_client(app, self.schedule);
         }
@@ -63,4 +74,8 @@ where
     T: Send + Sync + 'static,
 {
     server_world_app::build_update::<T>(app, schedule);
+}
+
+fn drive_simulation_time(mut target_time: ResMut<SimulationTimeTarget>, time: Res<Time>) {
+    **target_time += time.delta();
 }
