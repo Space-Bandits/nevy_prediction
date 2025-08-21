@@ -12,19 +12,25 @@ pub mod simulation_entity;
 
 /// This schedule runs on a fixed timestep with [SimulationTime].
 #[derive(ScheduleLabel, Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct SimulationSchedule;
+pub struct SimulationUpdate;
 
-/// The [Time] resource for the [SimulationSchedule].
+/// This schedule resets the simulation.
+/// Add systems to this schedule that remove entities/components/resources from the previous simulation instance,
+/// as well as initialize a fresh instance of the simulation.
+#[derive(ScheduleLabel, Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct ResetSimulation;
+
+/// The [Time] resource for the [SimulationUpdate].
 ///
 /// This time resource is advanced on a fixed timestep.
 ///
 /// Wherever the simulatin runs this is the generic time resource.
 ///
-/// When outside of [SimulationSchedule] this time resource will contain the time of the next simulation step.
+/// When outside of [SimulationUpdate] this time resource will contain the time of the next simulation step.
 #[derive(Default, Clone)]
 pub struct SimulationTime;
 
-/// System set where [SimulationSchedule] is run.
+/// System set where [SimulationUpdate] is run.
 #[derive(SystemSet, Clone, Copy, Default, Debug, PartialEq, Eq, Hash)]
 pub struct StepSimulation;
 
@@ -49,7 +55,7 @@ pub enum SimulationInstance {
 
 /// This plugin is added to all instances of the simulation.
 ///
-/// Controls the execution of the [SimulationSchedule] and [SimulationTime].
+/// Controls the execution of the [SimulationUpdate] and [SimulationTime].
 pub(crate) struct SimulationPlugin<S> {
     pub _p: PhantomData<S>,
     pub schedule: Interned<dyn ScheduleLabel>,
@@ -63,7 +69,8 @@ where
     fn build(&self, app: &mut App) {
         app.insert_resource(self.instance);
 
-        app.add_schedule(Schedule::new(SimulationSchedule));
+        app.add_schedule(Schedule::new(SimulationUpdate));
+        app.add_schedule(Schedule::new(ResetSimulation));
 
         simulation_entity::build(app);
 
@@ -93,7 +100,7 @@ where
     app.init_resource::<UpdateQueue<T>>();
 }
 
-/// Advances [SimulationTime] and the [SimulationSchedule].
+/// Advances [SimulationTime] and the [SimulationUpdate].
 fn run_simulation_schedule(world: &mut World) {
     // Save the current generic time to replace it after using it for the
     let old_time = world.resource::<Time>().clone();
@@ -109,7 +116,7 @@ fn run_simulation_schedule(world: &mut World) {
         }
 
         *world.resource_mut::<Time>() = simulation_time.as_generic();
-        world.run_schedule(SimulationSchedule);
+        world.run_schedule(SimulationUpdate);
 
         world
             .resource_mut::<Time<SimulationTime>>()

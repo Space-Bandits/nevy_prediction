@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use nevy_prediction::{
     client::parallel_app::{ExtractSimulation, SourceWorld},
     common::simulation::{
-        ReadyUpdates, SimulationInstance, SimulationSchedule,
+        ReadyUpdates, ResetSimulation, SimulationInstance, SimulationTime, SimulationUpdate,
         simulation_entity::ExtractSimulationEntities,
     },
     server::{SimulationEntity, SimulationEntityMap},
@@ -15,7 +15,7 @@ pub struct SimulationPlugin;
 impl Plugin for SimulationPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
-            SimulationSchedule,
+            SimulationUpdate,
             (log_simulation_time, apply_new_boxes).chain(),
         );
 
@@ -23,15 +23,13 @@ impl Plugin for SimulationPlugin {
             ExtractSimulation,
             (log_extracts, extract_boxes.after(ExtractSimulationEntities)),
         );
+
+        app.add_systems(ResetSimulation, log_resets);
     }
 }
 
 fn log_simulation_time(time: Res<Time>, instance: Res<SimulationInstance>) {
-    debug!(
-        "simulation: {:?} time: {}",
-        *instance,
-        time.elapsed().as_millis()
-    );
+    debug!("Update {:?} at {}", *instance, time.elapsed().as_millis());
 }
 
 fn log_extracts(source_world: Res<SourceWorld>, instance: Res<SimulationInstance>) {
@@ -40,6 +38,10 @@ fn log_extracts(source_world: Res<SourceWorld>, instance: Res<SimulationInstance
         *source_world.resource::<SimulationInstance>(),
         *instance
     );
+}
+
+fn log_resets(instance: Res<SimulationInstance>, time: Res<Time<SimulationTime>>) {
+    debug!("Reset {:?} time {:?}", *instance, time.elapsed());
 }
 
 #[derive(Component)]

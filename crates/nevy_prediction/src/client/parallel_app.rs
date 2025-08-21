@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use bevy::{
     app::PluginsState,
     ecs::schedule::ScheduleLabel,
@@ -5,7 +7,14 @@ use bevy::{
     tasks::{AsyncComputeTaskPool, Task, block_on, poll_once},
 };
 
-pub(crate) enum ParallelApp {
+use crate::common::simulation::{ResetSimulation, SimulationTime, SimulationTimeTarget};
+
+pub(crate) struct ParallelApp {
+    state: ParallelAppState,
+    reset: Option<Duration>,
+}
+
+enum ParallelAppState {
     Idle(App),
     Running(Task<Result<App>>),
 }
@@ -19,11 +28,14 @@ impl ParallelApp {
         app.finish();
         app.cleanup();
 
-        ParallelApp::Idle(app)
+        ParallelApp {
+            state: ParallelAppState::Idle(app),
+            reset: Some(Duration::ZERO),
+        }
     }
 
     pub fn update(&mut self) {
-        let ParallelApp::Idle(app) = self else {
+        let ParallelAppState::Idle(app) = &mut self.state else {
             return;
         };
 
@@ -31,22 +43,46 @@ impl ParallelApp {
 
         let task = AsyncComputeTaskPool::get().spawn_local(run_parallel_app(app));
 
-        *self = ParallelApp::Running(task);
+        self.state = ParallelAppState::Running(task);
     }
 
     pub fn poll(&mut self) -> Result<Option<&mut App>> {
+        Ok(self.state.poll()?.map(|app| {
+            if let Some(elapsed) = self.reset.take() {
+                self.reset = None;
+
+                let mut time = Time::new_with(SimulationTime);
+                time.advance_to(elapsed);
+                app.insert_resource(time);
+                app.insert_resource(SimulationTimeTarget(elapsed));
+
+                app.world_mut().run_schedule(ResetSimulation);
+            }
+
+            app
+        }))
+    }
+
+    /// Sets a flag so that before the app is returned on the next `Self::poll()` the [ResetSimulation] schedule will be run.
+    pub fn reset(&mut self, time: Duration) {
+        self.reset = Some(time);
+    }
+}
+
+impl ParallelAppState {
+    pub fn poll(&mut self) -> Result<Option<&mut App>> {
         let task = match self {
-            ParallelApp::Idle(app) => return Ok(Some(app)),
-            ParallelApp::Running(task) => task,
+            ParallelAppState::Idle(app) => return Ok(Some(app)),
+            ParallelAppState::Running(task) => task,
         };
 
         let Some(result) = block_on(poll_once(task)) else {
             return Ok(None);
         };
 
-        *self = ParallelApp::Idle(result?);
+        *self = ParallelAppState::Idle(result?);
 
-        let ParallelApp::Idle(app) = self else {
+        let ParallelAppState::Idle(app) = self else {
             unreachable!();
         };
 

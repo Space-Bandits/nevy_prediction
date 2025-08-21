@@ -147,12 +147,14 @@ fn extract_predicted_app(world: &mut World, mut scratch_world: Local<Option<Worl
     *world.resource_mut::<Time<SimulationTime>>() =
         (*prediction_world.resource::<Time<SimulationTime>>()).clone();
 
+    // Insert server world and run extract schedule.
     world.insert_resource(SourceWorld(prediction_world));
     world.run_schedule(ExtractSimulation);
     let SourceWorld(mut prediction_world) = world
         .remove_resource()
         .ok_or("Extract schedule removed the `SourceWorld`")?;
 
+    // Swap server world back and replace scratch world.
     std::mem::swap(&mut prediction_world, prediction_app.world_mut());
     *scratch_world = Some(prediction_world);
 

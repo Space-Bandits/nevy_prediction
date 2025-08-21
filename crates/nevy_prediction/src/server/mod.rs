@@ -8,11 +8,11 @@ use nevy::*;
 use serde::Serialize;
 
 use crate::common::{
-    UpdateServerTime,
+    ResetClientSimulation, UpdateServerTime,
     scheme::PredictionScheme,
     simulation::{
-        SimulationInstance, SimulationPlugin, SimulationSchedule, SimulationTime,
-        SimulationTimeTarget, StepSimulation, WorldUpdate,
+        ResetSimulation, SimulationInstance, SimulationPlugin, SimulationTime,
+        SimulationTimeTarget, SimulationUpdate, StepSimulation, WorldUpdate,
     },
 };
 
@@ -23,7 +23,6 @@ pub use crate::common::{
 
 #[derive(SystemSet, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ServerSimulationSet {
-    UpdateSimulationTime,
     QueueUpdates,
     RunSimulation,
 }
@@ -63,7 +62,6 @@ where
         app.configure_sets(
             self.schedule,
             (
-                ServerSimulationSet::UpdateSimulationTime,
                 ServerSimulationSet::QueueUpdates,
                 ServerSimulationSet::RunSimulation,
             )
@@ -81,12 +79,15 @@ where
             StepSimulation.in_set(ServerSimulationSet::RunSimulation),
         );
 
+        app.add_systems(Startup, reset_simulation);
+
         app.add_systems(
             self.schedule,
-            drive_simulation_time.in_set(ServerSimulationSet::UpdateSimulationTime),
+            (drive_simulation_time, send_simulation_resets::<S>)
+                .in_set(ServerSimulationSet::QueueUpdates),
         );
 
-        app.add_systems(SimulationSchedule, send_simulation_time_updates::<S>);
+        app.add_systems(SimulationUpdate, send_simulation_time_updates::<S>);
 
         for update in S::updates().0 {
             update.build_server(app, self.schedule);
@@ -101,6 +102,10 @@ where
     let _ = (app, schedule);
 }
 
+fn reset_simulation(world: &mut World) {
+    world.run_schedule(ResetSimulation);
+}
+
 /// Marker type for the simulation updates stream [SharedMessageSender].
 pub struct SimulationUpdatesStream;
 
@@ -108,31 +113,20 @@ pub struct SimulationUpdatesStream;
 #[derive(Component)]
 pub struct PredictionClient;
 
-// fn on_interval(interval: Duration) -> impl Condition<()> {
-//     IntoSystem::into_system(move |mut last_run: Local<Duration>, time: Res<Time>| {
-//         if *last_run + interval <= time.elapsed() {
-//             *last_run = time.elapsed();
-//             true
-//         } else {
-//             false
-//         }
-//     })
-// }
-
 fn drive_simulation_time(mut target_time: ResMut<SimulationTimeTarget>, time: Res<Time>) {
     **target_time += time.delta();
 }
 
 fn send_simulation_time_updates<S>(
     time: Res<Time<SimulationTime>>,
-    clients: Query<Entity, With<PredictionClient>>,
+    client_q: Query<Entity, With<PredictionClient>>,
     mut messages: SharedMessageSender<SimulationUpdatesStream>,
     message_id: Res<MessageId<UpdateServerTime>>,
 ) -> Result
 where
     S: PredictionScheme,
 {
-    for client_entity in &clients {
+    for client_entity in &client_q {
         messages.write(
             S::message_header(),
             client_entity,
@@ -142,6 +136,32 @@ where
                 simulation_time: time.elapsed(),
             },
         )?;
+    }
+
+    Ok(())
+}
+
+fn send_simulation_resets<S>(
+    new_client_q: Query<Entity, Added<PredictionClient>>,
+    time: Res<Time<SimulationTime>>,
+    mut messages: SharedMessageSender<SimulationUpdatesStream>,
+    message_id: Res<MessageId<ResetClientSimulation>>,
+) -> Result
+where
+    S: PredictionScheme,
+{
+    for client_entity in &new_client_q {
+        messages.write(
+            S::message_header(),
+            client_entity,
+            *message_id,
+            true,
+            &ResetClientSimulation {
+                simulation_time: time.elapsed(),
+            },
+        )?;
+
+        debug!("Sent reset to {}", client_entity);
     }
 
     Ok(())

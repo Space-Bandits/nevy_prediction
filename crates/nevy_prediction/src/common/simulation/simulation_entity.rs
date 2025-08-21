@@ -1,7 +1,10 @@
 use bevy::{platform::collections::HashMap, prelude::*};
 use serde::{Deserialize, Serialize};
 
-use crate::client::parallel_app::{ExtractSimulation, SourceWorld};
+use crate::{
+    client::parallel_app::{ExtractSimulation, SourceWorld},
+    common::simulation::ResetSimulation,
+};
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ExtractSimulationEntities;
@@ -22,6 +25,8 @@ pub fn build(app: &mut App) {
             .chain()
             .in_set(ExtractSimulationEntities),
     );
+
+    app.add_systems(ResetSimulation, reset_simulation_entities);
 }
 
 /// This component is a unique id that can be used to map entities across all instances of the simulation.
@@ -32,6 +37,10 @@ pub fn build(app: &mut App) {
 /// during the [ExtractSimulation] schedule in the [ExtractSimulationEntities] system set.
 /// You can then utilize the [SimulationEntityMap] from the current world to find which [SimulationEntity]
 /// in the current world belongs to a [SimulationEntity] in the [SourceWorld].
+///
+/// Entities with this component will be despawned when the [ResetSimulation] schedule runs,
+/// so if you have many types of entities with this component you don't have to create a system that despawns
+/// each of them.
 #[derive(Component, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[component(immutable)]
 pub struct SimulationEntity(pub u64);
@@ -111,6 +120,15 @@ fn extract_simulation_entities(
 fn despawn_removed_simulation_entities(
     mut commands: Commands,
     entity_q: Query<Entity, With<RemovedSimulationEntity>>,
+) {
+    for entity in &entity_q {
+        commands.entity(entity).despawn();
+    }
+}
+
+fn reset_simulation_entities(
+    mut commands: Commands,
+    entity_q: Query<Entity, With<SimulationEntity>>,
 ) {
     for entity in &entity_q {
         commands.entity(entity).despawn();

@@ -1,13 +1,21 @@
-use std::marker::PhantomData;
+use std::{marker::PhantomData, time::Duration};
 
 use bevy::{
     ecs::{intern::Interned, schedule::ScheduleLabel},
     prelude::*,
 };
+use nevy::*;
 
-use crate::common::{
-    scheme::PredictionScheme,
-    simulation::{SimulationInstance, SimulationPlugin, SimulationTimeTarget},
+use crate::{
+    client::{prediction_app::PredictionApp, server_world_app::ServerWorldApp},
+    common::{
+        ResetClientSimulation,
+        scheme::PredictionScheme,
+        simulation::{
+            ResetSimulation, SimulationInstance, SimulationPlugin, SimulationTime,
+            SimulationTimeTarget,
+        },
+    },
 };
 
 pub mod parallel_app;
@@ -16,6 +24,7 @@ pub mod server_world_app;
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ClientPredictionSet {
+    ResetSimulation,
     QueueUpdates,
     RunPredictionWorld,
     RunServerWorld,
@@ -43,6 +52,7 @@ where
         app.configure_sets(
             self.schedule,
             (
+                ClientPredictionSet::ResetSimulation,
                 ClientPredictionSet::QueueUpdates,
                 ClientPredictionSet::RunPredictionWorld,
                 ClientPredictionSet::RunServerWorld,
@@ -60,7 +70,15 @@ where
             instance: SimulationInstance::ClientMain,
         });
 
-        app.add_systems(Update, drive_simulation_time);
+        app.add_systems(
+            Update,
+            (
+                receive_reset_simulations
+                    .pipe(reset_simulations)
+                    .in_set(ClientPredictionSet::ResetSimulation),
+                drive_simulation_time.in_set(ClientPredictionSet::QueueUpdates),
+            ),
+        );
 
         for update in S::updates().0 {
             update.build_client(app, self.schedule);
@@ -78,4 +96,41 @@ where
 
 fn drive_simulation_time(mut target_time: ResMut<SimulationTimeTarget>, time: Res<Time>) {
     **target_time += time.delta();
+}
+
+fn receive_reset_simulations(
+    mut message_q: Query<&mut ReceivedMessages<ResetClientSimulation>>,
+) -> Option<Duration> {
+    let mut reset = None;
+
+    for mut messages in &mut message_q {
+        for ResetClientSimulation { simulation_time } in messages.drain() {
+            reset = Some(simulation_time);
+        }
+    }
+
+    reset
+}
+
+fn reset_simulations(In(reset): In<Option<Duration>>, world: &mut World) {
+    let Some(elapsed) = reset else {
+        return;
+    };
+
+    debug!("resetting simulation to {:?}", elapsed);
+
+    world
+        .non_send_resource_mut::<ServerWorldApp>()
+        .reset(elapsed);
+    world
+        .non_send_resource_mut::<PredictionApp>()
+        .app
+        .reset(elapsed);
+
+    let mut time = Time::new_with(SimulationTime);
+    time.advance_to(elapsed);
+    world.insert_resource(time);
+    world.insert_resource(SimulationTimeTarget(elapsed));
+
+    world.run_schedule(ResetSimulation);
 }
