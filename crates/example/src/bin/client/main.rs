@@ -1,9 +1,11 @@
+use avian3d::prelude::*;
 use bevy::{
     log::{Level, LogPlugin},
+    math::VectorSpace,
     prelude::*,
 };
 use example::scheme::PhysicsScheme;
-use nevy_prediction::client::*;
+use nevy_prediction::{client::*, common::simulation::SimulationUpdate};
 
 use crate::networking::ClientConnection;
 
@@ -20,12 +22,14 @@ fn main() {
     }));
 
     example::build(&mut app);
-
     networking::build(&mut app);
 
     app.add_plugins(NevyPredictionClientPlugin::<PhysicsScheme>::default());
 
+    app.add_plugins(PhysicsDebugPlugin::new(PostUpdate));
+
     app.add_systems(PostStartup, debug_connect_to_server);
+    app.add_systems(Startup, setup_camera);
 
     app.run();
 }
@@ -53,4 +57,11 @@ fn debug_connect_to_server(
     ));
 
     Ok(())
+}
+
+fn setup_camera(mut commands: Commands) {
+    commands.spawn((
+        Camera3d::default(),
+        Transform::from_xyz(-10., 10., 10.).looking_at(Vec3::ZERO, Vec3::Y),
+    ));
 }

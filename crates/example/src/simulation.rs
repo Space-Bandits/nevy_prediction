@@ -1,11 +1,11 @@
-use bevy::prelude::*;
+use avian3d::prelude::*;
+use bevy::{prelude::*, scene::ScenePlugin};
 use nevy_prediction::{
     client::parallel_app::{ExtractSimulation, SourceWorld},
     common::simulation::{
-        ReadyUpdates, ResetSimulation, SimulationInstance, SimulationTime, SimulationUpdate,
-        simulation_entity::ExtractSimulationEntities,
+        ReadyUpdates, ResetSimulation, SimulationInstance, SimulationStartup, SimulationTime,
+        SimulationUpdate, extract_component::ExtractSimulationComponentPlugin,
     },
-    server::{SimulationEntity, SimulationEntityMap},
 };
 
 use crate::scheme::NewPhysicsBox;
@@ -14,15 +14,34 @@ pub struct SimulationPlugin;
 
 impl Plugin for SimulationPlugin {
     fn build(&self, app: &mut App) {
+        let instance = *app.world().resource::<SimulationInstance>();
+
+        if let SimulationInstance::ClientServerWorld | SimulationInstance::ClientPrediction =
+            instance
+        {
+            app.init_resource::<AppTypeRegistry>();
+            app.register_type::<Name>();
+            app.register_type::<ChildOf>();
+            app.register_type::<Children>();
+
+            app.add_plugins((AssetPlugin::default(), ScenePlugin));
+            app.init_asset::<Mesh>();
+        }
+
+        app.add_plugins(PhysicsPlugins::new(SimulationUpdate));
+
+        app.add_plugins(ExtractSimulationComponentPlugin::<PhysicsBox>::default());
+        app.add_plugins(ExtractSimulationComponentPlugin::<Position>::default());
+        app.add_plugins(ExtractSimulationComponentPlugin::<Rotation>::default());
+
+        app.add_systems(SimulationStartup, spawn_ground_plane);
+
         app.add_systems(
             SimulationUpdate,
             (log_simulation_time, apply_new_boxes).chain(),
         );
 
-        app.add_systems(
-            ExtractSimulation,
-            (log_extracts, extract_boxes.after(ExtractSimulationEntities)),
-        );
+        app.add_systems(ExtractSimulation, (log_extracts));
 
         app.add_systems(ResetSimulation, log_resets);
     }
@@ -44,7 +63,14 @@ fn log_resets(instance: Res<SimulationInstance>, time: Res<Time<SimulationTime>>
     debug!("Reset {:?} time {:?}", *instance, time.elapsed());
 }
 
-#[derive(Component)]
+#[derive(Component, Clone)]
+#[require(
+    RigidBody::Static,
+    Transform,
+    Position,
+    Rotation,
+    Collider::cuboid(1., 1., 1.)
+)]
 pub struct PhysicsBox;
 
 fn apply_new_boxes(mut commands: Commands, mut updates: ReadyUpdates<NewPhysicsBox>) {
@@ -55,17 +81,10 @@ fn apply_new_boxes(mut commands: Commands, mut updates: ReadyUpdates<NewPhysicsB
     }
 }
 
-fn extract_boxes(
-    mut commands: Commands,
-    map: Res<SimulationEntityMap>,
-    mut source_world: ResMut<SourceWorld>,
-    mut box_q: Local<Option<QueryState<&SimulationEntity, With<PhysicsBox>>>>,
-) {
-    let box_q = box_q.get_or_insert_with(|| source_world.query_filtered());
-
-    for &simulation_entity in box_q.iter(&*source_world) {
-        commands
-            .entity(map.get(simulation_entity).unwrap())
-            .insert(PhysicsBox);
-    }
+fn spawn_ground_plane(mut commands: Commands) {
+    commands.spawn((
+        RigidBody::Static,
+        Transform::default(),
+        Collider::half_space(Vec3::Y),
+    ));
 }

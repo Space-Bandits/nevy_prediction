@@ -4,7 +4,10 @@ use bevy::prelude::*;
 use nevy::*;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
-use crate::common::{scheme::PredictionScheme, simulation::WorldUpdate};
+use crate::common::{
+    scheme::PredictionScheme,
+    simulation::{ResetSimulation, SimulationStartup, WorldUpdate},
+};
 
 pub mod scheme;
 pub mod simulation;
@@ -17,6 +20,8 @@ where
     app.add_message::<ResetClientSimulation>();
     app.add_message::<UpdateServerTime>();
 
+    app.add_systems(Startup, startup_simulation);
+
     for update in S::updates().0 {
         update.build_common(app);
     }
@@ -28,6 +33,11 @@ where
     T: Serialize + DeserializeOwned + Send + Sync + 'static,
 {
     app.add_message::<ServerWorldUpdate<T>>();
+}
+
+fn startup_simulation(world: &mut World) {
+    world.run_schedule(SimulationStartup);
+    world.run_schedule(ResetSimulation);
 }
 
 /// Server -> Client message to reset the simulation before sending updates

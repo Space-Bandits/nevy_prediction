@@ -1,6 +1,7 @@
 use bevy::{
     log::{Level, LogPlugin},
     prelude::*,
+    scene::ScenePlugin,
 };
 use example::{
     networking::StreamHeader,
@@ -26,6 +27,9 @@ fn main() {
             + ",bevy_render=info,bevy_app=info,offset_allocator=info,bevy_asset=info,gilrs=info,bevy_winit=info",
         ..default()
     });
+
+    app.add_plugins((AssetPlugin::default(), ScenePlugin));
+    app.init_asset::<Mesh>();
 
     example::build(&mut app);
 

@@ -11,8 +11,8 @@ use crate::common::{
     ResetClientSimulation, UpdateServerTime,
     scheme::PredictionScheme,
     simulation::{
-        ResetSimulation, SimulationInstance, SimulationPlugin, SimulationTime,
-        SimulationTimeTarget, SimulationUpdate, StepSimulation, WorldUpdate,
+        SimulationInstance, SimulationPlugin, SimulationTime, SimulationTimeTarget,
+        SimulationUpdate, StepSimulation, WorldUpdate,
     },
 };
 
@@ -79,8 +79,6 @@ where
             StepSimulation.in_set(ServerSimulationSet::RunSimulation),
         );
 
-        app.add_systems(Startup, reset_simulation);
-
         app.add_systems(
             self.schedule,
             (drive_simulation_time, send_simulation_resets::<S>)
@@ -100,10 +98,6 @@ where
     T: Send + Sync + 'static,
 {
     let _ = (app, schedule);
-}
-
-fn reset_simulation(world: &mut World) {
-    world.run_schedule(ResetSimulation);
 }
 
 /// Marker type for the simulation updates stream [SharedMessageSender].

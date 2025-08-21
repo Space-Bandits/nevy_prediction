@@ -8,15 +8,22 @@ use serde::{Deserialize, Serialize};
 
 use crate::common::scheme::PredictionScheme;
 
+pub mod extract_component;
 pub mod simulation_entity;
 
 /// This schedule runs on a fixed timestep with [SimulationTime].
 #[derive(ScheduleLabel, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct SimulationUpdate;
 
-/// This schedule resets the simulation.
+/// This is the first schedule to run on all simulation instances and only ever runs once.
+#[derive(ScheduleLabel, Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct SimulationStartup;
+
+/// This schedule resets the simulation instance.
 /// Add systems to this schedule that remove entities/components/resources from the previous simulation instance,
 /// as well as initialize a fresh instance of the simulation.
+///
+/// This is different from [SimulationStartup] in that it may run multiple times over the lifetime of the simulation.
 #[derive(ScheduleLabel, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ResetSimulation;
 
