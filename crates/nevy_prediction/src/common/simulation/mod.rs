@@ -20,10 +20,9 @@ pub struct SimulationUpdate;
 pub struct SimulationStartup;
 
 /// This schedule resets the simulation instance.
-/// Add systems to this schedule that remove entities/components/resources from the previous simulation instance,
-/// as well as initialize a fresh instance of the simulation.
+/// Add systems to this schedule that remove data belonging to the simulation, as well as initialize any new data.
 ///
-/// This is different from [SimulationStartup] in that it may run multiple times over the lifetime of the simulation.
+/// This is different from [SimulationStartup] in that it may run multiple times over the lifetime of the world.
 #[derive(ScheduleLabel, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ResetSimulation;
 
@@ -177,7 +176,7 @@ impl<'w, T> ReadyUpdates<'w, T>
 where
     T: Send + Sync + 'static,
 {
-    pub fn read(&mut self) -> impl Iterator<Item = T> + '_ {
+    pub fn drain(&mut self) -> impl Iterator<Item = T> + '_ {
         std::iter::from_fn(move || {
             let front = self.updates.updates.front()?;
 

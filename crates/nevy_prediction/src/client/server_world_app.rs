@@ -12,7 +12,8 @@ use crate::{
         ServerWorldUpdate, UpdateServerTime,
         scheme::PredictionScheme,
         simulation::{
-            SimulationInstance, SimulationPlugin, SimulationTime, SimulationTimeTarget, UpdateQueue,
+            SimulationInstance, SimulationPlugin, SimulationStartup, SimulationTime,
+            SimulationTimeTarget, UpdateQueue,
         },
     },
 };
@@ -58,6 +59,8 @@ impl ServerWorldApp {
             instance: SimulationInstance::ClientServerWorld,
         });
 
+        app.world_mut().run_schedule(SimulationStartup);
+
         ServerWorldApp(ParallelApp::new(app))
     }
 }
@@ -75,11 +78,6 @@ where
 
     for mut messages in &mut message_q {
         for ServerWorldUpdate { update } in messages.drain() {
-            debug!(
-                "received a world update for time {}",
-                update.time.as_millis()
-            );
-
             app.world_mut()
                 .resource_mut::<UpdateQueue<T>>()
                 .insert(update);

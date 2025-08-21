@@ -1,11 +1,10 @@
 use avian3d::prelude::*;
 use bevy::{
     log::{Level, LogPlugin},
-    math::VectorSpace,
     prelude::*,
 };
 use example::scheme::PhysicsScheme;
-use nevy_prediction::{client::*, common::simulation::SimulationUpdate};
+use nevy_prediction::client::*;
 
 use crate::networking::ClientConnection;
 

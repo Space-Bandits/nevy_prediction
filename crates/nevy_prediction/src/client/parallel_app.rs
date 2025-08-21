@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use bevy::{
     app::PluginsState,
@@ -91,7 +91,18 @@ impl ParallelAppState {
 }
 
 async fn run_parallel_app(mut app: App) -> Result<App> {
+    let start = Instant::now();
+    let simulation_start = app.world().resource::<Time<SimulationTime>>().elapsed();
+
     app.update();
+
+    let simulated_time =
+        app.world().resource::<Time<SimulationTime>>().elapsed() - simulation_start;
+    debug!(
+        "Parallel app advanced simulation {:?} in {:?}",
+        simulated_time,
+        start.elapsed()
+    );
 
     if let Some(app_exit) = app.should_exit() {
         return Err(format!("Parallel app exited, which souldn't happen: {:?}", app_exit).into());

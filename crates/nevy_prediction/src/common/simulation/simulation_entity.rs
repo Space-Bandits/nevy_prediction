@@ -31,12 +31,12 @@ pub fn build(app: &mut App) {
 
 /// This component is a unique id that can be used to map entities across all instances of the simulation.
 ///
-/// Use this component in your world updates and when extracting data between simulation instances.
+/// Use this component in your world updates and when extracting data between simulation instances to identify an entity.
 ///
 /// Entities with this component will be automatically spawned and despawned
 /// during the [ExtractSimulation] schedule in the [ExtractSimulationEntities] system set.
-/// You can then utilize the [SimulationEntityMap] from the current world to find which [SimulationEntity]
-/// in the current world belongs to a [SimulationEntity] in the [SourceWorld].
+/// You can then utilize the [SimulationEntityMap] from the [SourceWorld]
+/// to map a [SimulationEntity] in the source world to the current world.
 ///
 /// Entities with this component will be despawned when the [ResetSimulation] schedule runs,
 /// so if you have many types of entities with this component you don't have to create a system that despawns

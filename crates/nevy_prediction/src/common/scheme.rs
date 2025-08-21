@@ -1,7 +1,7 @@
 use std::{marker::PhantomData, time::Duration};
 
 use bevy::{
-    ecs::{entity::MapEntities, intern::Interned, schedule::ScheduleLabel},
+    ecs::{intern::Interned, schedule::ScheduleLabel},
     prelude::*,
 };
 use serde::{Serialize, de::DeserializeOwned};
@@ -39,7 +39,7 @@ pub(crate) trait SchemeUpdate {
 
 impl<T> SchemeUpdate for PhantomData<T>
 where
-    T: Send + Sync + 'static + Serialize + DeserializeOwned + Clone + MapEntities,
+    T: Send + Sync + 'static + Serialize + DeserializeOwned + Clone,
 {
     fn build_common(&self, app: &mut App) {
         crate::common::build_update::<T>(app);
@@ -71,7 +71,7 @@ impl SchemeWorldUpdates {
     /// meaning logic will break if it is used in another scheme in the same app.
     pub fn add_message<T: 'static>(&mut self) -> &mut Self
     where
-        T: Send + Sync + 'static + Serialize + DeserializeOwned + Clone + MapEntities,
+        T: Send + Sync + 'static + Serialize + DeserializeOwned + Clone,
     {
         self.0.push(Box::new(PhantomData::<T>));
         self
@@ -83,7 +83,7 @@ impl SchemeWorldUpdates {
     /// meaning logic will break if it is used in another scheme in the same app.
     pub fn with_message<T: 'static>(mut self) -> Self
     where
-        T: Send + Sync + 'static + Serialize + DeserializeOwned + Clone + MapEntities,
+        T: Send + Sync + 'static + Serialize + DeserializeOwned + Clone,
     {
         self.add_message::<T>();
         self

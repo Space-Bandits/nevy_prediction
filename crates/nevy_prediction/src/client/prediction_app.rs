@@ -13,7 +13,10 @@ use crate::{
     },
     common::{
         scheme::PredictionScheme,
-        simulation::{SimulationInstance, SimulationPlugin, SimulationTime, SimulationTimeTarget},
+        simulation::{
+            SimulationInstance, SimulationPlugin, SimulationStartup, SimulationTime,
+            SimulationTimeTarget,
+        },
     },
 };
 
@@ -56,6 +59,8 @@ impl PredictionApp {
             schedule: Main.intern(),
             instance: SimulationInstance::ClientPrediction,
         });
+
+        app.world_mut().run_schedule(SimulationStartup);
 
         PredictionApp {
             app: ParallelApp::new(app),

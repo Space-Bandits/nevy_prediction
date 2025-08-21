@@ -4,7 +4,7 @@ use bevy::{ecs::component::Mutable, prelude::*};
 
 use crate::{
     client::parallel_app::{ExtractSimulation, SourceWorld},
-    common::simulation::{SimulationInstance, simulation_entity::ExtractSimulationEntities},
+    common::simulation::simulation_entity::ExtractSimulationEntities,
     server::{SimulationEntity, SimulationEntityMap},
 };
 

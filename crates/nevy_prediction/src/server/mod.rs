@@ -154,8 +154,6 @@ where
                 simulation_time: time.elapsed(),
             },
         )?;
-
-        debug!("Sent reset to {}", client_entity);
     }
 
     Ok(())
@@ -182,12 +180,6 @@ impl<'w, 's> WorldUpdateSender<'w, 's> {
     where
         T: Serialize,
     {
-        debug!(
-            "Sent a world update to {} for time {}",
-            client_entity,
-            self.time.elapsed().as_millis()
-        );
-
         self.messages.write(
             header,
             client_entity,

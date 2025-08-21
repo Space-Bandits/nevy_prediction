@@ -1,14 +1,14 @@
 use avian3d::prelude::*;
 use bevy::{prelude::*, scene::ScenePlugin};
 use nevy_prediction::{
-    client::parallel_app::{ExtractSimulation, SourceWorld},
     common::simulation::{
-        ReadyUpdates, ResetSimulation, SimulationInstance, SimulationStartup, SimulationTime,
-        SimulationUpdate, extract_component::ExtractSimulationComponentPlugin,
+        ReadyUpdates, SimulationInstance, SimulationStartup, SimulationUpdate,
+        extract_component::ExtractSimulationComponentPlugin,
     },
+    server::SimulationEntityMap,
 };
 
-use crate::scheme::NewPhysicsBox;
+use crate::scheme::{NewPhysicsBox, UpdatePhysicsBody};
 
 pub struct SimulationPlugin;
 
@@ -38,34 +38,34 @@ impl Plugin for SimulationPlugin {
 
         app.add_systems(
             SimulationUpdate,
-            (log_simulation_time, apply_new_boxes).chain(),
+            (apply_new_boxes, apply_update_body).chain(),
         );
 
-        app.add_systems(ExtractSimulation, (log_extracts));
-
-        app.add_systems(ResetSimulation, log_resets);
+        // app.add_systems(SimulationUpdate, log_simulation_time);
+        // app.add_systems(ExtractSimulation, log_extracts);
+        // app.add_systems(ResetSimulation, log_resets);
     }
 }
 
-fn log_simulation_time(time: Res<Time>, instance: Res<SimulationInstance>) {
-    debug!("Update {:?} at {}", *instance, time.elapsed().as_millis());
-}
+// fn log_simulation_time(time: Res<Time>, instance: Res<SimulationInstance>) {
+//     debug!("Update {:?} at {}", *instance, time.elapsed().as_millis());
+// }
 
-fn log_extracts(source_world: Res<SourceWorld>, instance: Res<SimulationInstance>) {
-    debug!(
-        "Extracting {:?} -> {:?}",
-        *source_world.resource::<SimulationInstance>(),
-        *instance
-    );
-}
+// fn log_extracts(source_world: Res<SourceWorld>, instance: Res<SimulationInstance>) {
+//     debug!(
+//         "Extracting {:?} -> {:?}",
+//         *source_world.resource::<SimulationInstance>(),
+//         *instance
+//     );
+// }
 
-fn log_resets(instance: Res<SimulationInstance>, time: Res<Time<SimulationTime>>) {
-    debug!("Reset {:?} time {:?}", *instance, time.elapsed());
-}
+// fn log_resets(instance: Res<SimulationInstance>, time: Res<Time<SimulationTime>>) {
+//     debug!("Reset {:?} time {:?}", *instance, time.elapsed());
+// }
 
 #[derive(Component, Clone)]
 #[require(
-    RigidBody::Static,
+    RigidBody::Dynamic,
     Transform,
     Position,
     Rotation,
@@ -74,11 +74,54 @@ fn log_resets(instance: Res<SimulationInstance>, time: Res<Time<SimulationTime>>
 pub struct PhysicsBox;
 
 fn apply_new_boxes(mut commands: Commands, mut updates: ReadyUpdates<NewPhysicsBox>) {
-    for NewPhysicsBox { entity } in updates.read() {
+    for NewPhysicsBox { entity } in updates.drain() {
         commands.spawn((PhysicsBox, entity));
 
         debug!("Spawned a new physics box");
     }
+}
+
+fn apply_update_body(
+    mut updates: ReadyUpdates<UpdatePhysicsBody>,
+    map: Res<SimulationEntityMap>,
+    mut body_q: Query<(
+        &mut Position,
+        &mut Rotation,
+        &mut LinearVelocity,
+        &mut AngularVelocity,
+    )>,
+) -> Result {
+    for UpdatePhysicsBody {
+        entity,
+        position,
+        rotation,
+        linear_velocity,
+        angular_velocity,
+    } in updates.drain()
+    {
+        let Some(body_entity) = map.get(entity) else {
+            error!(
+                "Couldn't get simulation entity {:?} to update physics body",
+                entity
+            );
+
+            continue;
+        };
+
+        let (
+            mut current_position,
+            mut current_rotation,
+            mut current_linear_velocity,
+            mut current_angular_velocity,
+        ) = body_q.get_mut(body_entity)?;
+
+        *current_position = position;
+        *current_rotation = rotation;
+        *current_linear_velocity = linear_velocity;
+        *current_angular_velocity = angular_velocity;
+    }
+
+    Ok(())
 }
 
 fn spawn_ground_plane(mut commands: Commands) {

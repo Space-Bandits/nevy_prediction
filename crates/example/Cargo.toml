@@ -12,4 +12,4 @@ rcgen = "0.13.1"
 
 nevy_prediction.path = "../nevy_prediction"
 
-avian3d = "0.3"
+avian3d = { version = "0.3", features = ["serialize"] }
