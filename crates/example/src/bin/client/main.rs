@@ -3,8 +3,11 @@ use bevy::{
     log::{Level, LogPlugin},
     prelude::*,
 };
-use example::scheme::PhysicsScheme;
-use nevy_prediction::client::*;
+use example::{
+    scheme::{PhysicsScheme, UpdatePhysicsBody},
+    simulation::PhysicsBox,
+};
+use nevy_prediction::{client::*, server::SimulationEntity};
 
 use crate::networking::ClientConnection;
 
@@ -29,6 +32,10 @@ fn main() {
 
     app.add_systems(PostStartup, debug_connect_to_server);
     app.add_systems(Startup, setup_camera);
+    app.add_systems(
+        Update,
+        simulation_input.in_set(ClientSimulationSet::QueueUpdates),
+    );
 
     app.run();
 }
@@ -63,4 +70,26 @@ fn setup_camera(mut commands: Commands) {
         Camera3d::default(),
         Transform::from_xyz(-10., 10., 10.).looking_at(Vec3::ZERO, Vec3::Y),
     ));
+}
+
+fn simulation_input(
+    input: Res<ButtonInput<KeyCode>>,
+    box_q: Query<&SimulationEntity, With<PhysicsBox>>,
+    mut sender: PredictionUpdateSender<UpdatePhysicsBody>,
+) {
+    if !input.just_pressed(KeyCode::Space) {
+        return;
+    }
+
+    for &entity in &box_q {
+        sender.write(UpdatePhysicsBody {
+            entity,
+            position: Position(Vec3::new(0., 3., -1.)),
+            rotation: default(),
+            linear_velocity: default(),
+            angular_velocity: default(),
+        });
+
+        debug!("Sent input for {:?}", entity);
+    }
 }

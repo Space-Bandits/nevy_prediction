@@ -1,4 +1,4 @@
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use bevy::{
     app::PluginsState,
@@ -9,17 +9,17 @@ use bevy::{
 
 use crate::common::simulation::{ResetSimulation, SimulationTime, SimulationTimeTarget};
 
-pub(crate) struct ParallelApp {
-    state: ParallelAppState,
+pub(crate) struct ParallelWorld {
+    state: ParallelWorldState,
     reset: Option<Duration>,
 }
 
-enum ParallelAppState {
-    Idle(App),
-    Running(Task<Result<App>>),
+enum ParallelWorldState {
+    Idle(World),
+    Running(Task<World>),
 }
 
-impl ParallelApp {
+impl ParallelWorld {
     pub fn new(mut app: App) -> Self {
         // make sure the app finished building before updating it
         while let PluginsState::Adding = app.plugins_state() {
@@ -28,87 +28,93 @@ impl ParallelApp {
         app.finish();
         app.cleanup();
 
-        ParallelApp {
-            state: ParallelAppState::Idle(app),
+        let world = std::mem::take(app.world_mut());
+
+        ParallelWorld {
+            state: ParallelWorldState::Idle(world),
             reset: Some(Duration::ZERO),
         }
     }
 
-    pub fn update(&mut self) {
-        let ParallelAppState::Idle(app) = &mut self.state else {
+    pub fn update(&mut self, log_time: bool) {
+        let ParallelWorldState::Idle(world) = &mut self.state else {
             return;
         };
 
-        let app = std::mem::replace(app, App::empty());
+        let app = std::mem::take(world);
 
-        let task = AsyncComputeTaskPool::get().spawn_local(run_parallel_app(app));
+        let task = AsyncComputeTaskPool::get().spawn(run_parallel_world(app, log_time));
 
-        self.state = ParallelAppState::Running(task);
+        self.state = ParallelWorldState::Running(task);
     }
 
-    pub fn poll(&mut self) -> Result<Option<&mut App>> {
-        Ok(self.state.poll()?.map(|app| {
+    pub fn poll(&mut self) -> bool {
+        self.state.poll()
+    }
+
+    pub fn get(&mut self) -> Option<&mut World> {
+        self.state.get().map(|world| {
             if let Some(elapsed) = self.reset.take() {
                 self.reset = None;
 
                 let mut time = Time::new_with(SimulationTime);
                 time.advance_to(elapsed);
-                app.insert_resource(time);
-                app.insert_resource(SimulationTimeTarget(elapsed));
+                world.insert_resource(time);
+                world.insert_resource(SimulationTimeTarget(elapsed));
 
-                app.world_mut().run_schedule(ResetSimulation);
+                world.run_schedule(ResetSimulation);
             }
 
-            app
-        }))
+            world
+        })
     }
 
-    /// Sets a flag so that before the app is returned on the next `Self::poll()` the [ResetSimulation] schedule will be run.
+    /// Sets a flag so that before the app is returned on the next `Self::get()` the [ResetSimulation] schedule will be run.
     pub fn reset(&mut self, time: Duration) {
         self.reset = Some(time);
     }
 }
 
-impl ParallelAppState {
-    pub fn poll(&mut self) -> Result<Option<&mut App>> {
-        let task = match self {
-            ParallelAppState::Idle(app) => return Ok(Some(app)),
-            ParallelAppState::Running(task) => task,
+impl ParallelWorldState {
+    fn poll(&mut self) -> bool {
+        let ParallelWorldState::Running(task) = self else {
+            return true;
         };
 
         let Some(result) = block_on(poll_once(task)) else {
-            return Ok(None);
+            return false;
         };
 
-        *self = ParallelAppState::Idle(result?);
+        *self = ParallelWorldState::Idle(result);
 
-        let ParallelAppState::Idle(app) = self else {
-            unreachable!();
+        true
+    }
+
+    fn get(&mut self) -> Option<&mut World> {
+        let ParallelWorldState::Idle(world) = self else {
+            return None;
         };
 
-        Ok(Some(app))
+        Some(world)
     }
 }
 
-async fn run_parallel_app(mut app: App) -> Result<App> {
-    let start = Instant::now();
-    let simulation_start = app.world().resource::<Time<SimulationTime>>().elapsed();
+async fn run_parallel_world(mut world: World, _log_time: bool) -> World {
+    // let start = std::time::Instant::now();
+    // let simulation_start = world.resource::<Time<SimulationTime>>().elapsed();
 
-    app.update();
+    world.run_schedule(Main);
 
-    let simulated_time =
-        app.world().resource::<Time<SimulationTime>>().elapsed() - simulation_start;
-    debug!(
-        "Parallel app advanced simulation {:?} in {:?}",
-        simulated_time,
-        start.elapsed()
-    );
+    // let simulated_time = world.resource::<Time<SimulationTime>>().elapsed() - simulation_start;
+    // if _log_time {
+    //     debug!(
+    //         "Parallel world advanced simulation {:?} in {:?}",
+    //         simulated_time,
+    //         start.elapsed()
+    //     );
+    // }
 
-    if let Some(app_exit) = app.should_exit() {
-        return Err(format!("Parallel app exited, which souldn't happen: {:?}", app_exit).into());
-    }
-
-    Ok(app)
+    world
 }
 
 /// Schedule that extracts the simulation state from a [SourceWorld] into the current world.

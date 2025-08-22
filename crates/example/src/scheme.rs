@@ -28,7 +28,7 @@ impl PredictionScheme for PhysicsScheme {
     }
 
     fn step_interval() -> Duration {
-        Duration::from_millis(50)
+        Duration::from_millis(20)
     }
 }
 

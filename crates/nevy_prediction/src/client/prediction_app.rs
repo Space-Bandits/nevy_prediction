@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, time::Duration};
+use std::{collections::VecDeque, marker::PhantomData, time::Duration};
 
 use bevy::{
     ecs::{intern::Interned, schedule::ScheduleLabel},
@@ -7,15 +7,15 @@ use bevy::{
 
 use crate::{
     client::{
-        ClientPredictionSet,
-        parallel_app::{ExtractSimulation, ParallelApp, SourceWorld},
-        server_world_app::ServerWorldApp,
+        ClientSimulationSet,
+        parallel_app::{ExtractSimulation, ParallelWorld, SourceWorld},
+        server_world_app::{ServerWorld, ServerWorldTime},
     },
     common::{
         scheme::PredictionScheme,
         simulation::{
             SimulationInstance, SimulationPlugin, SimulationStartup, SimulationTime,
-            SimulationTimeTarget,
+            SimulationTimeTarget, UpdateQueue, WorldUpdate,
         },
     },
 };
@@ -24,27 +24,50 @@ pub(crate) fn build<S>(app: &mut App, schedule: Interned<dyn ScheduleLabel>)
 where
     S: PredictionScheme,
 {
-    app.insert_non_send_resource(PredictionApp::new::<S>());
-    app.insert_resource(PredictionInterval(Duration::from_millis(1000)));
+    app.insert_non_send_resource(PredictionWorld::new::<S>());
+    app.insert_resource(PredictionInterval(Duration::from_millis(300)));
 
     app.add_systems(
         schedule,
-        (extract_predicted_app, run_prediction_app)
-            .chain()
-            .in_set(ClientPredictionSet::RunPredictionWorld),
+        (
+            poll_prediction_world.in_set(ClientSimulationSet::PollParallelApps),
+            (
+                set_prediction_target,
+                extract_predicton_world,
+                extract_server_world,
+            )
+                .chain()
+                .in_set(ClientSimulationSet::ExtractPredictionApps),
+            run_prediction_app.in_set(ClientSimulationSet::RunPredictionApps),
+        ),
+    );
+}
+
+pub(crate) fn build_update<T>(app: &mut App, schedule: Interned<dyn ScheduleLabel>)
+where
+    T: Send + Sync + 'static + Clone,
+{
+    app.init_resource::<PredictionUpdates<T>>();
+
+    app.add_systems(
+        schedule,
+        (drain_prediction_updates::<T>, queue_prediction_updates::<T>)
+            .in_set(ClientSimulationSet::QueuePredictionAppUpdates),
     );
 }
 
 #[derive(Resource, Default, Deref, DerefMut)]
 pub(crate) struct PredictionInterval(pub Duration);
 
-pub(crate) struct PredictionApp {
-    pub app: ParallelApp,
+pub(crate) struct PredictionWorld {
+    pub world: ParallelWorld,
     /// whether the finished predicted world has been extracted into the main app.
     pub applied: bool,
+    /// Whether the prediction app will be run this tick.
+    pub prediction_needed: bool,
 }
 
-impl PredictionApp {
+impl PredictionWorld {
     pub fn new<S>() -> Self
     where
         S: PredictionScheme,
@@ -62,109 +85,172 @@ impl PredictionApp {
 
         app.world_mut().run_schedule(SimulationStartup);
 
-        PredictionApp {
-            app: ParallelApp::new(app),
+        PredictionWorld {
+            world: ParallelWorld::new(app),
             applied: true,
+            prediction_needed: false,
         }
     }
 }
 
-fn run_prediction_app(
-    mut server_world_app_state: NonSendMut<ServerWorldApp>,
-    mut prediction_app_state: NonSendMut<PredictionApp>,
+fn poll_prediction_world(mut prediction_world: NonSendMut<PredictionWorld>) {
+    prediction_world.world.poll();
+}
+
+fn set_prediction_target(
+    server_time: Res<ServerWorldTime>,
     prediction_interval: Res<PredictionInterval>,
-    mut scratch_world: Local<Option<World>>,
-) -> Result {
-    if !prediction_app_state.applied {
+    mut prediction_world_state: NonSendMut<PredictionWorld>,
+) {
+    let Some(prediction_world) = prediction_world_state.world.get() else {
+        return;
+    };
+
+    let mut current_target = prediction_world.resource_mut::<SimulationTimeTarget>();
+
+    let prediction_target = **server_time + **prediction_interval;
+
+    if prediction_target > **current_target {
+        **current_target = prediction_target;
+        prediction_world_state.prediction_needed = true;
+    } else {
+    }
+}
+
+fn extract_predicton_world(world: &mut World, mut scratch_world: Local<Option<World>>) -> Result {
+    let mut prediction_world_state = world
+        .remove_non_send_resource::<PredictionWorld>()
+        .ok_or("Prediction world should exist")?;
+
+    if prediction_world_state.applied {
+        world.insert_non_send_resource(prediction_world_state);
         return Ok(());
     }
 
-    // Check that both the server world app and prediction app are idle.
-    let Some(server_world_app) = server_world_app_state.poll()? else {
+    let Some(prediction_world) = prediction_world_state.world.get() else {
+        world.insert_non_send_resource(prediction_world_state);
         return Ok(());
     };
 
-    let Some(prediction_app) = prediction_app_state.app.poll()? else {
-        return Ok(());
-    };
-
-    // Check if there are new ticks to predict.
-    let server_time = **server_world_app.world().resource::<SimulationTimeTarget>();
-    let mut current_target = prediction_app
-        .world_mut()
-        .resource_mut::<SimulationTimeTarget>();
-
-    let target = server_time + **prediction_interval;
-    if **current_target >= target {
-        return Ok(());
-    }
-
-    **current_target = target;
-
-    // Swap server world with scratch world.
-    let mut server_world = scratch_world.take().unwrap_or_default();
-    std::mem::swap(&mut server_world, server_world_app.world_mut());
+    let mut owned_prediction_world = scratch_world.take().unwrap_or_default();
+    std::mem::swap(&mut owned_prediction_world, prediction_world);
 
     // Extract the simulation time from the source world.
-    *prediction_app
-        .world_mut()
-        .resource_mut::<Time<SimulationTime>>() =
-        (*server_world.resource::<Time<SimulationTime>>()).clone();
+    *world.resource_mut::<Time<SimulationTime>>() =
+        (*owned_prediction_world.resource::<Time<SimulationTime>>()).clone();
 
     // Insert server world and run extract schedule.
-    prediction_app.insert_resource(SourceWorld(server_world));
-    prediction_app.world_mut().run_schedule(ExtractSimulation);
-    let SourceWorld(mut server_world) = prediction_app
-        .world_mut()
+    world.insert_resource(SourceWorld(owned_prediction_world));
+    world.run_schedule(ExtractSimulation);
+    let SourceWorld(mut owned_prediction_world) = world
         .remove_resource()
         .ok_or("Extract schedule removed the `SourceWorld`")?;
 
     // Swap server world back and replace scratch world.
-    std::mem::swap(&mut server_world, server_world_app.world_mut());
-    *scratch_world = Some(server_world);
+    std::mem::swap(&mut owned_prediction_world, prediction_world);
+    *scratch_world = Some(owned_prediction_world);
 
-    // Run prediction app.
-    prediction_app_state.applied = false;
-    prediction_app_state.app.update();
+    prediction_world_state.applied = true;
+    world.insert_non_send_resource(prediction_world_state);
 
     Ok(())
 }
 
-fn extract_predicted_app(world: &mut World, mut scratch_world: Local<Option<World>>) -> Result {
-    let mut prediction_app_state = world
-        .remove_non_send_resource::<PredictionApp>()
-        .ok_or("Prediction app should exist")?;
-
-    if prediction_app_state.applied {
-        world.insert_non_send_resource(prediction_app_state);
+fn extract_server_world(
+    mut server_world_state: NonSendMut<ServerWorld>,
+    mut prediction_world_state: NonSendMut<PredictionWorld>,
+    mut scratch_world: Local<Option<World>>,
+) -> Result {
+    if !prediction_world_state.prediction_needed {
         return Ok(());
     }
 
-    let Some(prediction_app) = prediction_app_state.app.poll()? else {
-        world.insert_non_send_resource(prediction_app_state);
+    // Check that both the server world app and prediction app are idle.
+    let Some(server_world_app) = server_world_state.get() else {
         return Ok(());
     };
 
-    let mut prediction_world = scratch_world.take().unwrap_or_default();
-    std::mem::swap(&mut prediction_world, prediction_app.world_mut());
+    let Some(prediction_app) = prediction_world_state.world.get() else {
+        return Ok(());
+    };
+
+    // Swap server world with scratch world.
+    let mut owned_server_world = scratch_world.take().unwrap_or_default();
+    std::mem::swap(&mut owned_server_world, server_world_app);
 
     // Extract the simulation time from the source world.
-    *world.resource_mut::<Time<SimulationTime>>() =
-        (*prediction_world.resource::<Time<SimulationTime>>()).clone();
+    *prediction_app.resource_mut::<Time<SimulationTime>>() =
+        (*owned_server_world.resource::<Time<SimulationTime>>()).clone();
 
     // Insert server world and run extract schedule.
-    world.insert_resource(SourceWorld(prediction_world));
-    world.run_schedule(ExtractSimulation);
-    let SourceWorld(mut prediction_world) = world
+    prediction_app.insert_resource(SourceWorld(owned_server_world));
+    prediction_app.run_schedule(ExtractSimulation);
+    let SourceWorld(mut owned_server_world) = prediction_app
         .remove_resource()
         .ok_or("Extract schedule removed the `SourceWorld`")?;
 
     // Swap server world back and replace scratch world.
-    std::mem::swap(&mut prediction_world, prediction_app.world_mut());
-    *scratch_world = Some(prediction_world);
-
-    prediction_app_state.applied = true;
-    world.insert_non_send_resource(prediction_app_state);
+    std::mem::swap(&mut owned_server_world, server_world_app);
+    *scratch_world = Some(owned_server_world);
 
     Ok(())
+}
+
+fn run_prediction_app(mut prediction_app: NonSendMut<PredictionWorld>) {
+    if !prediction_app.prediction_needed {
+        return;
+    }
+
+    prediction_app.world.update(true);
+    prediction_app.applied = false;
+}
+
+/// This is a sorted list of world updates that haven't been reconciled with the server.
+///
+/// These updates get added to the update queue of the prediction app before it is run.
+#[derive(Resource, Deref, DerefMut)]
+pub(crate) struct PredictionUpdates<T>(pub VecDeque<WorldUpdate<T>>);
+
+impl<T> Default for PredictionUpdates<T> {
+    fn default() -> Self {
+        PredictionUpdates(VecDeque::new())
+    }
+}
+
+fn drain_prediction_updates<T>(
+    server_time: Res<ServerWorldTime>,
+    mut updates: ResMut<PredictionUpdates<T>>,
+) where
+    T: Send + Sync + 'static,
+{
+    while let Some(front) = updates.front() {
+        if front.time < **server_time {
+            debug!("Popped reconciled input");
+            updates.pop_front();
+        } else {
+            break;
+        }
+    }
+}
+
+fn queue_prediction_updates<T>(
+    prediction_updates: Res<PredictionUpdates<T>>,
+    mut prediction_world: NonSendMut<PredictionWorld>,
+) where
+    T: Send + Sync + 'static + Clone,
+{
+    if !prediction_world.prediction_needed {
+        return;
+    }
+
+    let Some(world) = prediction_world.world.get() else {
+        return;
+    };
+
+    let mut queue = world.resource_mut::<UpdateQueue<T>>();
+
+    for update in (**prediction_updates).iter().cloned() {
+        debug!("Queued input for prediction");
+        queue.insert(update);
+    }
 }

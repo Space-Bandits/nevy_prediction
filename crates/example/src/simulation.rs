@@ -1,8 +1,9 @@
 use avian3d::prelude::*;
 use bevy::{prelude::*, scene::ScenePlugin};
 use nevy_prediction::{
+    client::parallel_app::SourceWorld,
     common::simulation::{
-        ReadyUpdates, SimulationInstance, SimulationStartup, SimulationUpdate,
+        ReadyUpdates, SimulationInstance, SimulationStartup, SimulationTime, SimulationUpdate,
         extract_component::ExtractSimulationComponentPlugin,
     },
     server::SimulationEntityMap,
@@ -42,26 +43,38 @@ impl Plugin for SimulationPlugin {
         );
 
         // app.add_systems(SimulationUpdate, log_simulation_time);
-        // app.add_systems(ExtractSimulation, log_extracts);
-        // app.add_systems(ResetSimulation, log_resets);
+        // app.add_systems(
+        //     nevy_prediction::client::parallel_app::ExtractSimulation,
+        //     log_extracts,
+        // );
+        // app.add_systems(
+        //     nevy_prediction::common::simulation::ResetSimulation,
+        //     log_resets,
+        // );
     }
 }
 
-// fn log_simulation_time(time: Res<Time>, instance: Res<SimulationInstance>) {
-//     debug!("Update {:?} at {}", *instance, time.elapsed().as_millis());
-// }
+#[allow(dead_code)]
+fn log_simulation_time(time: Res<Time>, instance: Res<SimulationInstance>) {
+    let SimulationInstance::ClientMain = *instance else {
+        return;
+    };
+    debug!("Update {:?} at {}", *instance, time.elapsed().as_millis());
+}
 
-// fn log_extracts(source_world: Res<SourceWorld>, instance: Res<SimulationInstance>) {
-//     debug!(
-//         "Extracting {:?} -> {:?}",
-//         *source_world.resource::<SimulationInstance>(),
-//         *instance
-//     );
-// }
+#[allow(dead_code)]
+fn log_extracts(source_world: Res<SourceWorld>, instance: Res<SimulationInstance>) {
+    debug!(
+        "Extracting {:?} -> {:?}",
+        *source_world.resource::<SimulationInstance>(),
+        *instance
+    );
+}
 
-// fn log_resets(instance: Res<SimulationInstance>, time: Res<Time<SimulationTime>>) {
-//     debug!("Reset {:?} time {:?}", *instance, time.elapsed());
-// }
+#[allow(dead_code)]
+fn log_resets(instance: Res<SimulationInstance>, time: Res<Time<SimulationTime>>) {
+    debug!("Reset {:?} time {:?}", *instance, time.elapsed());
+}
 
 #[derive(Component, Clone)]
 #[require(

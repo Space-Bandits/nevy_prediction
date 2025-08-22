@@ -1,19 +1,22 @@
 use std::{marker::PhantomData, time::Duration};
 
 use bevy::{
-    ecs::{intern::Interned, schedule::ScheduleLabel},
+    ecs::{intern::Interned, schedule::ScheduleLabel, system::SystemParam},
     prelude::*,
 };
 use nevy::*;
 
 use crate::{
-    client::{prediction_app::PredictionApp, server_world_app::ServerWorldApp},
+    client::{
+        prediction_app::{PredictionUpdates, PredictionWorld},
+        server_world_app::ServerWorld,
+    },
     common::{
         ResetClientSimulation,
         scheme::PredictionScheme,
         simulation::{
             ResetSimulation, SimulationInstance, SimulationPlugin, SimulationTime,
-            SimulationTimeTarget,
+            SimulationTimeTarget, UpdateQueue, WorldUpdate,
         },
     },
 };
@@ -23,11 +26,22 @@ pub mod prediction_app;
 pub mod server_world_app;
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
-pub enum ClientPredictionSet {
-    ResetSimulation,
+pub enum ClientSimulationSet {
+    /// Parallel apps are polled for completion.
+    PollParallelApps,
+    /// Simulations get reset by the server.
+    ResetSimulations,
+    /// Simulation time updates are received by the server.
+    ReceiveTime,
+    /// The prediction app is extracted into the main world
+    /// The server world app is extracted into the prediction app
+    ExtractPredictionApps,
+    /// User queues world updates.
     QueueUpdates,
-    RunPredictionWorld,
-    RunServerWorld,
+    /// Predicted updates are queued to the prediction world.
+    QueuePredictionAppUpdates,
+    /// Prediction apps are run.
+    RunPredictionApps,
 }
 
 pub struct NevyPredictionClientPlugin<S> {
@@ -52,10 +66,13 @@ where
         app.configure_sets(
             self.schedule,
             (
-                ClientPredictionSet::ResetSimulation,
-                ClientPredictionSet::QueueUpdates,
-                ClientPredictionSet::RunPredictionWorld,
-                ClientPredictionSet::RunServerWorld,
+                ClientSimulationSet::PollParallelApps,
+                ClientSimulationSet::ResetSimulations,
+                ClientSimulationSet::ReceiveTime,
+                ClientSimulationSet::ExtractPredictionApps,
+                ClientSimulationSet::QueueUpdates,
+                ClientSimulationSet::QueuePredictionAppUpdates,
+                ClientSimulationSet::RunPredictionApps,
             )
                 .chain(),
         );
@@ -75,8 +92,8 @@ where
             (
                 receive_reset_simulations
                     .pipe(reset_simulations)
-                    .in_set(ClientPredictionSet::ResetSimulation),
-                drive_simulation_time.in_set(ClientPredictionSet::QueueUpdates),
+                    .in_set(ClientSimulationSet::ResetSimulations),
+                drive_simulation_time.in_set(ClientSimulationSet::ReceiveTime),
             ),
         );
 
@@ -89,9 +106,10 @@ where
 /// Is called on the client app for each world update message added by the prediction scheme
 pub(crate) fn build_update<T>(app: &mut App, schedule: Interned<dyn ScheduleLabel>)
 where
-    T: Send + Sync + 'static,
+    T: Send + Sync + 'static + Clone,
 {
     server_world_app::build_update::<T>(app, schedule);
+    prediction_app::build_update::<T>(app, schedule);
 }
 
 fn drive_simulation_time(mut target_time: ResMut<SimulationTimeTarget>, time: Res<Time>) {
@@ -119,12 +137,10 @@ fn reset_simulations(In(reset): In<Option<Duration>>, world: &mut World) {
 
     debug!("resetting simulation to {:?}", elapsed);
 
+    world.non_send_resource_mut::<ServerWorld>().reset(elapsed);
     world
-        .non_send_resource_mut::<ServerWorldApp>()
-        .reset(elapsed);
-    world
-        .non_send_resource_mut::<PredictionApp>()
-        .app
+        .non_send_resource_mut::<PredictionWorld>()
+        .world
         .reset(elapsed);
 
     let mut time = Time::new_with(SimulationTime);
@@ -133,4 +149,34 @@ fn reset_simulations(In(reset): In<Option<Duration>>, world: &mut World) {
     world.insert_resource(SimulationTimeTarget(elapsed));
 
     world.run_schedule(ResetSimulation);
+}
+
+#[derive(SystemParam)]
+pub struct PredictionUpdateSender<'w, T>
+where
+    T: Send + Sync + 'static,
+{
+    time: Res<'w, Time<SimulationTime>>,
+    simulation_queue: ResMut<'w, UpdateQueue<T>>,
+    prediction_updates: ResMut<'w, PredictionUpdates<T>>,
+}
+
+impl<'w, T> PredictionUpdateSender<'w, T>
+where
+    T: Send + Sync + 'static + Clone,
+{
+    /// Creates a simulation world update for the next simulation step and does three things with it:
+    ///
+    /// - Sends it to the server (todo)
+    /// - Queues it in the main app simulation
+    /// - Records it to be used in prediction
+    pub fn write(&mut self, update: T) {
+        let update = WorldUpdate {
+            time: self.time.elapsed(),
+            update,
+        };
+
+        self.simulation_queue.insert(update.clone());
+        self.prediction_updates.push_back(update);
+    }
 }
