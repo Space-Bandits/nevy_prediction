@@ -29,7 +29,11 @@ impl Plugin for SimulationPlugin {
             app.init_asset::<Mesh>();
         }
 
-        app.add_plugins(PhysicsPlugins::new(SimulationUpdate));
+        app.add_plugins(
+            PhysicsPlugins::new(SimulationUpdate)
+                .build()
+                .disable::<PhysicsInterpolationPlugin>(),
+        );
 
         app.add_plugins(ExtractSimulationComponentPlugin::<PhysicsBox>::default());
         app.add_plugins(ExtractSimulationComponentPlugin::<Position>::default());

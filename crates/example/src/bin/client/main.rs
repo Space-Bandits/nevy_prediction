@@ -29,6 +29,7 @@ fn main() {
     app.add_plugins(NevyPredictionClientPlugin::<PhysicsScheme>::default());
 
     app.add_plugins(PhysicsDebugPlugin::new(PostUpdate));
+    app.add_plugins(PhysicsInterpolationPlugin::interpolate_all());
 
     app.add_systems(PostStartup, debug_connect_to_server);
     app.add_systems(Startup, setup_camera);
