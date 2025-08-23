@@ -184,6 +184,14 @@ where
                 return None;
             }
 
+            if front.time != self.time.elapsed() {
+                warn!(
+                    "Returned an update for {} late at {}",
+                    front.time.as_millis(),
+                    self.time.elapsed().as_millis()
+                )
+            }
+
             self.updates.updates.pop_front().map(|update| update.update)
         })
     }

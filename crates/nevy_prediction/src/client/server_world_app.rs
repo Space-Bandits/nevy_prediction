@@ -103,7 +103,13 @@ fn receive_time_updates(
     for mut messages in &mut message_q {
         for UpdateServerTime { simulation_time } in messages.drain() {
             **time = simulation_time;
-            **time_target = simulation_time + **prediction_interval;
+
+            let desired_target = simulation_time + **prediction_interval;
+            let actual_target = **time_target;
+
+            **time_target = Duration::from_secs_f64(
+                actual_target.as_secs_f64() * 0.95 + desired_target.as_secs_f64() * 0.05,
+            );
         }
     }
 

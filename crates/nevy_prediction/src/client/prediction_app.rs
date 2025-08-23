@@ -25,7 +25,7 @@ where
     S: PredictionScheme,
 {
     app.insert_non_send_resource(PredictionWorld::new::<S>());
-    app.insert_resource(PredictionInterval(Duration::from_millis(300)));
+    app.insert_resource(PredictionInterval(Duration::from_millis(1000)));
 
     app.add_systems(
         schedule,
@@ -37,7 +37,8 @@ where
                 extract_server_world,
             )
                 .chain()
-                .in_set(ClientSimulationSet::ExtractPredictionApps),
+                .in_set(ClientSimulationSet::ExtractPredictionWorlds),
+            set_prediction_wrold_extracted.after(ClientSimulationSet::ReapplyNewWorldUpdates),
             run_prediction_app.in_set(ClientSimulationSet::RunPredictionApps),
         ),
     );
@@ -51,8 +52,11 @@ where
 
     app.add_systems(
         schedule,
-        (drain_prediction_updates::<T>, queue_prediction_updates::<T>)
-            .in_set(ClientSimulationSet::QueuePredictionAppUpdates),
+        (
+            reapply_new_world_updates::<T>.in_set(ClientSimulationSet::ReapplyNewWorldUpdates),
+            (drain_prediction_updates::<T>, queue_prediction_updates::<T>)
+                .in_set(ClientSimulationSet::QueuePredictionAppUpdates),
+        ),
     );
 }
 
@@ -62,7 +66,7 @@ pub(crate) struct PredictionInterval(pub Duration);
 pub(crate) struct PredictionWorld {
     pub world: ParallelWorld,
     /// whether the finished predicted world has been extracted into the main app.
-    pub applied: bool,
+    pub extracted: bool,
     /// Whether the prediction app will be run this tick.
     pub prediction_needed: bool,
 }
@@ -87,7 +91,7 @@ impl PredictionWorld {
 
         PredictionWorld {
             world: ParallelWorld::new(app),
-            applied: true,
+            extracted: true,
             prediction_needed: false,
         }
     }
@@ -98,8 +102,7 @@ fn poll_prediction_world(mut prediction_world: NonSendMut<PredictionWorld>) {
 }
 
 fn set_prediction_target(
-    server_time: Res<ServerWorldTime>,
-    prediction_interval: Res<PredictionInterval>,
+    simulation_target: Res<SimulationTimeTarget>,
     mut prediction_world_state: NonSendMut<PredictionWorld>,
 ) {
     let Some(prediction_world) = prediction_world_state.world.get() else {
@@ -108,12 +111,11 @@ fn set_prediction_target(
 
     let mut current_target = prediction_world.resource_mut::<SimulationTimeTarget>();
 
-    let prediction_target = **server_time + **prediction_interval;
+    let prediction_target = **simulation_target;
 
     if prediction_target > **current_target {
         **current_target = prediction_target;
         prediction_world_state.prediction_needed = true;
-    } else {
     }
 }
 
@@ -122,7 +124,7 @@ fn extract_predicton_world(world: &mut World, mut scratch_world: Local<Option<Wo
         .remove_non_send_resource::<PredictionWorld>()
         .ok_or("Prediction world should exist")?;
 
-    if prediction_world_state.applied {
+    if prediction_world_state.extracted {
         world.insert_non_send_resource(prediction_world_state);
         return Ok(());
     }
@@ -150,10 +152,17 @@ fn extract_predicton_world(world: &mut World, mut scratch_world: Local<Option<Wo
     std::mem::swap(&mut owned_prediction_world, prediction_world);
     *scratch_world = Some(owned_prediction_world);
 
-    prediction_world_state.applied = true;
     world.insert_non_send_resource(prediction_world_state);
 
     Ok(())
+}
+
+fn set_prediction_wrold_extracted(mut prediction_world: NonSendMut<PredictionWorld>) {
+    if prediction_world.world.get().is_none() {
+        return;
+    }
+
+    prediction_world.extracted = true;
 }
 
 fn extract_server_world(
@@ -202,7 +211,7 @@ fn run_prediction_app(mut prediction_app: NonSendMut<PredictionWorld>) {
     }
 
     prediction_app.world.update(true);
-    prediction_app.applied = false;
+    prediction_app.extracted = false;
 }
 
 /// This is a sorted list of world updates that haven't been reconciled with the server.
@@ -225,7 +234,6 @@ fn drain_prediction_updates<T>(
 {
     while let Some(front) = updates.front() {
         if front.time < **server_time {
-            debug!("Popped reconciled input");
             updates.pop_front();
         } else {
             break;
@@ -249,8 +257,38 @@ fn queue_prediction_updates<T>(
 
     let mut queue = world.resource_mut::<UpdateQueue<T>>();
 
-    for update in (**prediction_updates).iter().cloned() {
-        debug!("Queued input for prediction");
+    for update in prediction_updates.iter().cloned() {
         queue.insert(update);
+    }
+}
+
+/// When the prediction world finishes, it will not contain any predicted world upates that were added while it was running.
+/// This system adds any updates that are newer than it's current simulation time
+fn reapply_new_world_updates<T>(
+    mut prediction_world: NonSendMut<PredictionWorld>,
+    predicted_time: Res<Time<SimulationTime>>,
+    prediction_updates: Res<PredictionUpdates<T>>,
+    mut prediction_queue: ResMut<UpdateQueue<T>>,
+) where
+    T: Send + Sync + 'static + Clone,
+{
+    if prediction_world.extracted {
+        return;
+    }
+
+    if prediction_world.world.get().is_none() {
+        return;
+    };
+
+    for update in prediction_updates.iter() {
+        if update.time >= predicted_time.elapsed() {
+            debug!(
+                "reapplied update for time {} at {}",
+                update.time.as_millis(),
+                predicted_time.elapsed().as_millis()
+            );
+
+            prediction_queue.insert(update.clone());
+        }
     }
 }

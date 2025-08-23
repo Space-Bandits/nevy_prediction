@@ -86,8 +86,8 @@ fn simulation_input(
             entity,
             position: Position(Vec3::new(0., 3., -1.)),
             rotation: default(),
-            linear_velocity: default(),
-            angular_velocity: default(),
+            linear_velocity: LinearVelocity(Vec3::new(0., -5., 0.)),
+            angular_velocity: AngularVelocity(Vec3::new(1., 1., 1.)),
         });
 
         debug!("Sent input for {:?}", entity);

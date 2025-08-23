@@ -1,7 +1,7 @@
 use avian3d::prelude::*;
 use bevy::{prelude::*, scene::ScenePlugin};
 use nevy_prediction::{
-    client::parallel_app::SourceWorld,
+    client::parallel_app::{ExtractSimulation, SourceWorld},
     common::simulation::{
         ReadyUpdates, SimulationInstance, SimulationStartup, SimulationTime, SimulationUpdate,
         extract_component::ExtractSimulationComponentPlugin,
@@ -34,6 +34,10 @@ impl Plugin for SimulationPlugin {
         app.add_plugins(ExtractSimulationComponentPlugin::<PhysicsBox>::default());
         app.add_plugins(ExtractSimulationComponentPlugin::<Position>::default());
         app.add_plugins(ExtractSimulationComponentPlugin::<Rotation>::default());
+        app.add_plugins(ExtractSimulationComponentPlugin::<LinearVelocity>::default());
+        app.add_plugins(ExtractSimulationComponentPlugin::<AngularVelocity>::default());
+
+        app.add_systems(ExtractSimulation, extract_physics_time);
 
         app.add_systems(SimulationStartup, spawn_ground_plane);
 
@@ -56,18 +60,28 @@ impl Plugin for SimulationPlugin {
 
 #[allow(dead_code)]
 fn log_simulation_time(time: Res<Time>, instance: Res<SimulationInstance>) {
-    let SimulationInstance::ClientMain = *instance else {
+    let (SimulationInstance::ClientMain | SimulationInstance::Server) = *instance else {
         return;
     };
+
     debug!("Update {:?} at {}", *instance, time.elapsed().as_millis());
 }
 
 #[allow(dead_code)]
-fn log_extracts(source_world: Res<SourceWorld>, instance: Res<SimulationInstance>) {
+fn log_extracts(
+    source_world: Res<SourceWorld>,
+    instance: Res<SimulationInstance>,
+    time: Res<Time<SimulationTime>>,
+) {
+    let SimulationInstance::ClientMain = *instance else {
+        return;
+    };
+
     debug!(
-        "Extracting {:?} -> {:?}",
+        "Extracting {:?} -> {:?} time is {}",
         *source_world.resource::<SimulationInstance>(),
-        *instance
+        *instance,
+        time.elapsed().as_millis()
     );
 }
 
@@ -143,4 +157,13 @@ fn spawn_ground_plane(mut commands: Commands) {
         Transform::default(),
         Collider::half_space(Vec3::Y),
     ));
+}
+
+fn extract_physics_time(
+    source_world: Res<SourceWorld>,
+    mut time: ResMut<Time<Physics>>,
+    mut substeps: ResMut<Time<Substeps>>,
+) {
+    *time = source_world.resource::<Time<Physics>>().clone();
+    *substeps = source_world.resource::<Time<Substeps>>().clone();
 }

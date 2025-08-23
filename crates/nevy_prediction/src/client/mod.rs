@@ -8,7 +8,7 @@ use nevy::*;
 
 use crate::{
     client::{
-        prediction_app::{PredictionUpdates, PredictionWorld},
+        prediction_app::{PredictionInterval, PredictionUpdates, PredictionWorld},
         server_world_app::ServerWorld,
     },
     common::{
@@ -16,7 +16,7 @@ use crate::{
         scheme::PredictionScheme,
         simulation::{
             ResetSimulation, SimulationInstance, SimulationPlugin, SimulationTime,
-            SimulationTimeTarget, UpdateQueue, WorldUpdate,
+            SimulationTimeTarget, StepSimulation, UpdateQueue, WorldUpdate,
         },
     },
 };
@@ -35,7 +35,9 @@ pub enum ClientSimulationSet {
     ReceiveTime,
     /// The prediction app is extracted into the main world
     /// The server world app is extracted into the prediction app
-    ExtractPredictionApps,
+    ExtractPredictionWorlds,
+    /// Reapply world updates that have been added while the prediction world was running
+    ReapplyNewWorldUpdates,
     /// User queues world updates.
     QueueUpdates,
     /// Predicted updates are queued to the prediction world.
@@ -69,12 +71,14 @@ where
                 ClientSimulationSet::PollParallelApps,
                 ClientSimulationSet::ResetSimulations,
                 ClientSimulationSet::ReceiveTime,
-                ClientSimulationSet::ExtractPredictionApps,
+                ClientSimulationSet::ExtractPredictionWorlds,
+                ClientSimulationSet::ReapplyNewWorldUpdates,
                 ClientSimulationSet::QueueUpdates,
                 ClientSimulationSet::QueuePredictionAppUpdates,
                 ClientSimulationSet::RunPredictionApps,
             )
-                .chain(),
+                .chain()
+                .before(StepSimulation),
         );
 
         crate::common::build::<S>(app);
@@ -83,12 +87,12 @@ where
 
         app.add_plugins(SimulationPlugin::<S> {
             _p: PhantomData,
-            schedule: Update.intern(),
+            schedule: self.schedule,
             instance: SimulationInstance::ClientMain,
         });
 
         app.add_systems(
-            Update,
+            self.schedule,
             (
                 receive_reset_simulations
                     .pipe(reset_simulations)
@@ -143,10 +147,12 @@ fn reset_simulations(In(reset): In<Option<Duration>>, world: &mut World) {
         .world
         .reset(elapsed);
 
+    let prediction_interval = **world.resource::<PredictionInterval>();
+
     let mut time = Time::new_with(SimulationTime);
-    time.advance_to(elapsed);
+    time.advance_to(elapsed + prediction_interval);
     world.insert_resource(time);
-    world.insert_resource(SimulationTimeTarget(elapsed));
+    world.insert_resource(SimulationTimeTarget(elapsed + prediction_interval));
 
     world.run_schedule(ResetSimulation);
 }
