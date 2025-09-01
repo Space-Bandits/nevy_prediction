@@ -1,6 +1,5 @@
 use std::time::Duration;
 
-use avian3d::prelude::*;
 use bevy::{
     log::{Level, LogPlugin},
     prelude::*,
@@ -8,7 +7,7 @@ use bevy::{
 };
 use example::{
     networking::StreamHeader,
-    scheme::{NewPhysicsBox, PhysicsScheme, UpdatePhysicsBody},
+    scheme::{NewPhysicsBox, PhysicsScheme},
     simulation::PhysicsBox,
 };
 use nevy_prediction::{common::simulation::UpdateQueue, server::*};
