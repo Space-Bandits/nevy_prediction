@@ -11,8 +11,7 @@ use example::{
     scheme::{NewPhysicsBox, PhysicsScheme, UpdatePhysicsBody},
     simulation::PhysicsBox,
 };
-use nevy::*;
-use nevy_prediction::server::*;
+use nevy_prediction::{common::simulation::UpdateQueue, server::*};
 
 use crate::{new_pairs::NewPairs, state::JoinedClient};
 
@@ -49,11 +48,14 @@ fn main() {
     app.add_systems(
         Update,
         (
-            replicate_new_boxes,
-            initialize_physics_bodies,
-            reconcile_physics_bodies,
+            (
+                replicate_new_boxes,
+                initialize_physics_bodies,
+                reconcile_physics_bodies,
+            )
+                .chain(),
+            accept_body_updates,
         )
-            .chain()
             .in_set(ServerSimulationSet::QueueUpdates),
     );
 
@@ -89,16 +91,14 @@ fn spawn_boxes(mut commands: Commands, mut allocator: ResMut<SimulationEntityAll
 fn replicate_new_boxes(
     pairs: NewPairs<PredictionClient, PhysicsBox>,
     box_q: Query<&SimulationEntity>,
-    mut updates: WorldUpdateSender,
-    message_id: Res<MessageId<ServerWorldUpdate<NewPhysicsBox>>>,
+    mut updates: WorldUpdateSender<NewPhysicsBox>,
 ) -> Result {
     for (client_entity, box_entity) in &pairs {
         let &entity = box_q.get(box_entity)?;
 
-        updates.write(
+        updates.write_now(
             StreamHeader::Messages,
             client_entity,
-            *message_id,
             NewPhysicsBox { entity },
         )?;
     }
@@ -118,17 +118,15 @@ fn initialize_physics_bodies(
         &LinearVelocity,
         &AngularVelocity,
     )>,
-    mut updates: WorldUpdateSender,
-    message_id: Res<MessageId<ServerWorldUpdate<UpdatePhysicsBody>>>,
+    mut updates: WorldUpdateSender<UpdatePhysicsBody>,
 ) -> Result {
     for (client_entity, body_entity) in &pairs {
         let (&entity, &position, &rotation, &linear_velocity, &angular_velocity) =
             body_q.get(body_entity)?;
 
-        updates.write(
+        updates.write_now(
             StreamHeader::Messages,
             client_entity,
-            *message_id,
             UpdatePhysicsBody {
                 entity,
                 position,
@@ -155,8 +153,7 @@ fn reconcile_physics_bodies(
         &AngularVelocity,
     )>,
     client_q: Query<Entity, With<PredictionClient>>,
-    mut updates: WorldUpdateSender,
-    message_id: Res<MessageId<ServerWorldUpdate<UpdatePhysicsBody>>>,
+    mut updates: WorldUpdateSender<UpdatePhysicsBody>,
 ) -> Result {
     if time.elapsed() < *last_update + RECINCILE_BODIES_INTERVAL {
         return Ok(());
@@ -166,10 +163,9 @@ fn reconcile_physics_bodies(
 
     for (&entity, &position, &rotation, &linear_velocity, &angular_velocity) in &body_q {
         for client_entity in &client_q {
-            updates.write(
+            updates.write_now(
                 StreamHeader::Messages,
                 client_entity,
-                *message_id,
                 UpdatePhysicsBody {
                     entity,
                     position,
@@ -179,6 +175,25 @@ fn reconcile_physics_bodies(
                 },
             )?;
         }
+    }
+
+    Ok(())
+}
+
+fn accept_body_updates(
+    mut updates: UpdateRequests<UpdatePhysicsBody>,
+    mut queue: ResMut<UpdateQueue<UpdatePhysicsBody>>,
+    client_q: Query<Entity, With<PredictionClient>>,
+    mut sender: WorldUpdateSender<UpdatePhysicsBody>,
+) -> Result {
+    for (client_entity, update) in updates.drain() {
+        debug!("client {} updated a physics body", client_entity);
+
+        for client_entity in &client_q {
+            sender.write(StreamHeader::Messages, client_entity, update.clone())?;
+        }
+
+        queue.insert(update);
     }
 
     Ok(())

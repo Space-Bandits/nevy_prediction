@@ -3,8 +3,8 @@ use bevy::{prelude::*, scene::ScenePlugin};
 use nevy_prediction::{
     client::parallel_app::{ExtractSimulation, SourceWorld},
     common::simulation::{
-        ReadyUpdates, SimulationInstance, SimulationStartup, SimulationTime, SimulationUpdate,
-        extract_component::ExtractSimulationComponentPlugin,
+        extract_component::ExtractSimulationComponentPlugin, ReadyUpdates, SimulationInstance,
+        SimulationStartup, SimulationTime, SimulationUpdate,
     },
     server::SimulationEntityMap,
 };
@@ -31,8 +31,6 @@ impl Plugin for SimulationPlugin {
 
         app.add_plugins(
             PhysicsPlugins::new(SimulationUpdate)
-                .build()
-                .disable::<PhysicsInterpolationPlugin>(),
         );
 
         app.add_plugins(ExtractSimulationComponentPlugin::<PhysicsBox>::default());

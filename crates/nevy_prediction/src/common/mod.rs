@@ -33,6 +33,7 @@ where
     T: Serialize + DeserializeOwned + Send + Sync + 'static,
 {
     app.add_message::<ServerWorldUpdate<T>>();
+    app.add_message::<RequestWorldUpdate<T>>();
 }
 
 fn startup_simulation(world: &mut World) {
@@ -54,6 +55,12 @@ pub(crate) struct UpdateServerTime {
 
 /// Server -> Client message to apply an update to the simulation world at a certain time.
 #[derive(Serialize, Deserialize)]
-pub struct ServerWorldUpdate<T> {
-    pub(crate) update: WorldUpdate<T>,
+pub(crate) struct ServerWorldUpdate<T> {
+    pub update: WorldUpdate<T>,
+}
+
+/// Client -> Server message to request a world update be applied.
+#[derive(Serialize, Deserialize)]
+pub(crate) struct RequestWorldUpdate<T> {
+    pub update: WorldUpdate<T>,
 }

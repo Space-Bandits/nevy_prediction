@@ -5,6 +5,7 @@ use bevy::{
     prelude::*,
 };
 use nevy::*;
+use serde::Serialize;
 
 use crate::{
     client::{
@@ -12,7 +13,7 @@ use crate::{
         server_world_app::ServerWorld,
     },
     common::{
-        ResetClientSimulation,
+        RequestWorldUpdate, ResetClientSimulation,
         scheme::PredictionScheme,
         simulation::{
             ResetSimulation, SimulationInstance, SimulationPlugin, SimulationTime,
@@ -116,17 +117,34 @@ where
     prediction_app::build_update::<T>(app, schedule);
 }
 
+/// Marker component that must be inserted onto the server connection entity for prediction.
+#[derive(Component)]
+pub struct PredictionServerConnection;
+
 fn drive_simulation_time(mut target_time: ResMut<SimulationTimeTarget>, time: Res<Time>) {
     **target_time += time.delta();
 }
 
 fn receive_reset_simulations(
-    mut message_q: Query<&mut ReceivedMessages<ResetClientSimulation>>,
+    mut message_q: Query<(
+        Entity,
+        &mut ReceivedMessages<ResetClientSimulation>,
+        Has<PredictionServerConnection>,
+    )>,
 ) -> Option<Duration> {
     let mut reset = None;
 
-    for mut messages in &mut message_q {
+    for (connection_entity, mut messages, is_server) in &mut message_q {
         for ResetClientSimulation { simulation_time } in messages.drain() {
+            if !is_server {
+                warn!(
+                    "Received a prediction message from a connection that isn't the server: {}",
+                    connection_entity
+                );
+
+                continue;
+            }
+
             reset = Some(simulation_time);
         }
     }
@@ -158,31 +176,62 @@ fn reset_simulations(In(reset): In<Option<Duration>>, world: &mut World) {
 }
 
 #[derive(SystemParam)]
-pub struct PredictionUpdateSender<'w, T>
+pub struct PredictionUpdateSender<'w, 's, T>
 where
     T: Send + Sync + 'static,
 {
     time: Res<'w, Time<SimulationTime>>,
     simulation_queue: ResMut<'w, UpdateQueue<T>>,
     prediction_updates: ResMut<'w, PredictionUpdates<T>>,
+    connection_q: Query<'w, 's, Entity, With<PredictionServerConnection>>,
+    message_sender: LocalMessageSender<'w, 's>,
+    message_id: Res<'w, MessageId<RequestWorldUpdate<T>>>,
 }
 
-impl<'w, T> PredictionUpdateSender<'w, T>
+impl<'w, 's, T> PredictionUpdateSender<'w, 's, T>
 where
-    T: Send + Sync + 'static + Clone,
+    T: Send + Sync + 'static + Clone + Serialize,
 {
+    pub fn flush(&mut self) -> Result {
+        self.message_sender.flush()?;
+
+        Ok(())
+    }
+
+    pub fn finish_if_uncongested(&mut self) -> Result {
+        self.message_sender.finish_all_if_uncongested()?;
+
+        Ok(())
+    }
+
     /// Creates a simulation world update for the next simulation step and does three things with it:
     ///
-    /// - Sends it to the server (todo)
+    /// - Sends it to the server
     /// - Queues it in the main app simulation
     /// - Records it to be used in prediction
-    pub fn write(&mut self, update: T) {
+    ///
+    /// For `header` and `queue` see [LocalMessageSender::write].
+    pub fn write(&mut self, header: impl Into<u16>, queue: bool, update: T) -> Result {
+        let connection_entity = self.connection_q.single()?;
+
         let update = WorldUpdate {
             time: self.time.elapsed(),
             update,
         };
 
+        self.message_sender.write(
+            header,
+            connection_entity,
+            *self.message_id,
+            queue,
+            &RequestWorldUpdate {
+                update: update.clone(),
+            },
+        )?;
+
         self.simulation_queue.insert(update.clone());
         self.prediction_updates.push_back(update);
+
+        Ok(())
     }
 }

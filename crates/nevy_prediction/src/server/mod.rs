@@ -8,7 +8,7 @@ use nevy::*;
 use serde::Serialize;
 
 use crate::common::{
-    ResetClientSimulation, UpdateServerTime,
+    RequestWorldUpdate, ResetClientSimulation, ServerWorldUpdate, UpdateServerTime,
     scheme::PredictionScheme,
     simulation::{
         SimulationInstance, SimulationPlugin, SimulationTime, SimulationTimeTarget,
@@ -16,10 +16,7 @@ use crate::common::{
     },
 };
 
-pub use crate::common::{
-    ServerWorldUpdate,
-    simulation::simulation_entity::{SimulationEntity, SimulationEntityMap},
-};
+pub use crate::common::simulation::simulation_entity::{SimulationEntity, SimulationEntityMap};
 
 #[derive(SystemSet, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ServerSimulationSet {
@@ -164,35 +161,92 @@ where
 /// These updates will be timestamped to be applied in the next simulation step.
 /// To ensure that the updates are applied properly they should be sent in [ServerSimulationSet::QueueUpdates].
 #[derive(SystemParam)]
-pub struct WorldUpdateSender<'w, 's> {
-    messages: SharedMessageSender<'w, 's, SimulationUpdatesStream>,
+pub struct WorldUpdateSender<'w, 's, T>
+where
+    T: Send + Sync + 'static,
+{
+    sender: SharedMessageSender<'w, 's, SimulationUpdatesStream>,
+    message_id: Res<'w, MessageId<ServerWorldUpdate<T>>>,
     time: Res<'w, Time<SimulationTime>>,
 }
 
-impl<'w, 's> WorldUpdateSender<'w, 's> {
-    pub fn write<T>(
+impl<'w, 's, T> WorldUpdateSender<'w, 's, T>
+where
+    T: Send + Sync + 'static,
+{
+    pub fn write_now(&mut self, header: impl Into<u16>, client_entity: Entity, update: T) -> Result
+    where
+        T: Serialize,
+    {
+        self.write(
+            header,
+            client_entity,
+            WorldUpdate {
+                time: self.time.elapsed(),
+                update,
+            },
+        )
+    }
+
+    pub fn write(
         &mut self,
         header: impl Into<u16>,
         client_entity: Entity,
-        message_id: MessageId<ServerWorldUpdate<T>>,
-        update: T,
+        update: WorldUpdate<T>,
     ) -> Result
     where
         T: Serialize,
     {
-        self.messages.write(
+        self.sender.write(
             header,
             client_entity,
-            message_id,
+            *self.message_id,
             true,
-            &ServerWorldUpdate {
-                update: WorldUpdate {
-                    time: self.time.elapsed(),
-                    update,
-                },
-            },
+            &ServerWorldUpdate { update },
         )?;
 
         Ok(())
+    }
+}
+
+#[derive(SystemParam)]
+pub struct UpdateRequests<'w, 's, T>
+where
+    T: Send + Sync + 'static,
+{
+    client_q: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static mut ReceivedMessages<RequestWorldUpdate<T>>,
+            Has<PredictionClient>,
+        ),
+    >,
+}
+
+impl<'w, 's, T> UpdateRequests<'w, 's, T>
+where
+    T: Send + Sync + 'static,
+{
+    pub fn drain(&mut self) -> impl Iterator<Item = (Entity, WorldUpdate<T>)> {
+        let mut updates = Vec::new();
+
+        for (connection_entity, mut messages, is_client) in &mut self.client_q {
+            for RequestWorldUpdate { update } in messages.drain() {
+                if !is_client {
+                    warn!(
+                        "Received a prediction message from a connection that isn't a client: {}",
+                        connection_entity
+                    );
+
+                    continue;
+                }
+
+                updates.push((connection_entity, update));
+            }
+        }
+
+        updates.into_iter()
     }
 }

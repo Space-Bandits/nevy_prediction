@@ -25,7 +25,7 @@ where
     S: PredictionScheme,
 {
     app.insert_non_send_resource(PredictionWorld::new::<S>());
-    app.insert_resource(PredictionInterval(Duration::from_millis(1000)));
+    app.insert_resource(PredictionInterval(Duration::from_millis(300)));
 
     app.add_systems(
         schedule,

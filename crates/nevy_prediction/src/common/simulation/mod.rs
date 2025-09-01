@@ -134,15 +134,17 @@ fn run_simulation_schedule(world: &mut World) {
 
 /// A world update with a simulation timestamp
 #[derive(Serialize, Deserialize, Clone, MapEntities)]
-pub(crate) struct WorldUpdate<T> {
-    pub(crate) time: Duration,
-    pub(crate) update: T,
+pub struct WorldUpdate<T> {
+    pub time: Duration,
+    pub update: T,
 }
 
-/// Contains a queue of world updates to be applied when their time is reached
+/// Contains a queue of world updates to be applied when their time is reached.
+///
+/// Queing updates to this resource is how you apply them.
 #[derive(Resource)]
-pub(crate) struct UpdateQueue<T> {
-    pub updates: VecDeque<WorldUpdate<T>>,
+pub struct UpdateQueue<T> {
+    updates: VecDeque<WorldUpdate<T>>,
 }
 
 impl<T> Default for UpdateQueue<T> {

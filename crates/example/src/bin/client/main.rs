@@ -4,6 +4,7 @@ use bevy::{
     prelude::*,
 };
 use example::{
+    networking::StreamHeader,
     scheme::{PhysicsScheme, UpdatePhysicsBody},
     simulation::PhysicsBox,
 };
@@ -29,7 +30,6 @@ fn main() {
     app.add_plugins(NevyPredictionClientPlugin::<PhysicsScheme>::default());
 
     app.add_plugins(PhysicsDebugPlugin::new(PostUpdate));
-    app.add_plugins(PhysicsInterpolationPlugin::interpolate_all());
 
     app.add_systems(PostStartup, debug_connect_to_server);
     app.add_systems(Startup, setup_camera);
@@ -55,6 +55,7 @@ fn debug_connect_to_server(
 
     commands.spawn((
         ClientConnection,
+        PredictionServerConnection,
         nevy::ConnectionOf(endpoint_entity),
         nevy::QuicConnectionConfig {
             client_config: networking::create_connection_config(),
@@ -77,20 +78,26 @@ fn simulation_input(
     input: Res<ButtonInput<KeyCode>>,
     box_q: Query<&SimulationEntity, With<PhysicsBox>>,
     mut sender: PredictionUpdateSender<UpdatePhysicsBody>,
-) {
+) -> Result {
     if !input.just_pressed(KeyCode::Space) {
-        return;
+        return Ok(());
     }
 
     for &entity in &box_q {
-        sender.write(UpdatePhysicsBody {
-            entity,
-            position: Position(Vec3::new(0., 3., -1.)),
-            rotation: default(),
-            linear_velocity: LinearVelocity(Vec3::new(0., -5., 0.)),
-            angular_velocity: AngularVelocity(Vec3::new(1., 1., 1.)),
-        });
+        sender.write(
+            StreamHeader::Messages,
+            false,
+            UpdatePhysicsBody {
+                entity,
+                position: Position(Vec3::new(0., 3., -1.)),
+                rotation: default(),
+                linear_velocity: LinearVelocity(Vec3::new(0., -5., 0.)),
+                angular_velocity: AngularVelocity(Vec3::new(1., 1., 1.)),
+            },
+        )?;
 
         debug!("Sent input for {:?}", entity);
     }
+
+    Ok(())
 }

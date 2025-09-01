@@ -8,7 +8,8 @@ use nevy::*;
 
 use crate::{
     client::{
-        ClientSimulationSet, parallel_app::ParallelWorld, prediction_app::PredictionInterval,
+        ClientSimulationSet, PredictionServerConnection, parallel_app::ParallelWorld,
+        prediction_app::PredictionInterval,
     },
     common::{
         ServerWorldUpdate, UpdateServerTime,
@@ -75,7 +76,11 @@ fn poll_server_world(mut server_world_app: NonSendMut<ServerWorld>) {
 
 fn receive_world_updates<T>(
     mut server_world: NonSendMut<ServerWorld>,
-    mut message_q: Query<&mut ReceivedMessages<ServerWorldUpdate<T>>>,
+    mut message_q: Query<(
+        Entity,
+        &mut ReceivedMessages<ServerWorldUpdate<T>>,
+        Has<PredictionServerConnection>,
+    )>,
 ) where
     T: Send + Sync + 'static,
 {
@@ -83,8 +88,17 @@ fn receive_world_updates<T>(
         return;
     };
 
-    for mut messages in &mut message_q {
+    for (connection_entity, mut messages, is_server) in &mut message_q {
         for ServerWorldUpdate { update } in messages.drain() {
+            if !is_server {
+                warn!(
+                    "Received a prediction message from a connection that isn't the server: {}",
+                    connection_entity
+                );
+
+                continue;
+            }
+
             world.resource_mut::<UpdateQueue<T>>().insert(update);
         }
     }
