@@ -1,12 +1,12 @@
-use avian3d::prelude::*;
 use bevy::{
+    color::palettes::css::*,
     log::{Level, LogPlugin},
     prelude::*,
 };
 use example::{
     networking::StreamHeader,
-    scheme::{PhysicsScheme, UpdatePhysicsBody},
-    simulation::PhysicsBox,
+    scheme::{PhysicsScheme, UpdateExampleBox},
+    simulation::ExampleBox,
 };
 use nevy_prediction::{client::*, server::SimulationEntity};
 
@@ -29,13 +29,14 @@ fn main() {
 
     app.add_plugins(NevyPredictionClientPlugin::<PhysicsScheme>::default());
 
-    app.add_plugins(PhysicsDebugPlugin::new(PostUpdate));
-
     app.add_systems(PostStartup, debug_connect_to_server);
     app.add_systems(Startup, setup_camera);
     app.add_systems(
         Update,
-        simulation_input.in_set(ClientSimulationSet::QueueUpdates),
+        (
+            render_example_boxes,
+            simulation_input.in_set(ClientSimulationSet::QueueUpdates),
+        ),
     );
 
     app.run();
@@ -70,29 +71,29 @@ fn debug_connect_to_server(
 fn setup_camera(mut commands: Commands) {
     commands.spawn((
         Camera3d::default(),
-        Transform::from_xyz(-10., 10., 10.).looking_at(Vec3::ZERO, Vec3::Y),
+        Transform::from_xyz(-1., 5., 1.).looking_at(Vec3::ZERO, Vec3::Y),
     ));
 }
 
 fn simulation_input(
     input: Res<ButtonInput<KeyCode>>,
-    box_q: Query<&SimulationEntity, With<PhysicsBox>>,
-    mut sender: PredictionUpdateSender<UpdatePhysicsBody>,
+    box_q: Query<(&SimulationEntity, &ExampleBox), With<ExampleBox>>,
+    mut sender: PredictionUpdateSender<UpdateExampleBox>,
 ) -> Result {
     if !input.just_pressed(KeyCode::Space) {
         return Ok(());
     }
 
-    for &entity in &box_q {
+    for (&entity, example_box) in &box_q {
         sender.write(
             StreamHeader::Messages,
             false,
-            UpdatePhysicsBody {
+            UpdateExampleBox {
                 entity,
-                position: Position(Vec3::new(0., 3., -1.)),
-                rotation: default(),
-                linear_velocity: LinearVelocity(Vec3::new(0., -5., 0.)),
-                angular_velocity: AngularVelocity(Vec3::new(1., 1., 1.)),
+                example_box: ExampleBox {
+                    position: example_box.position,
+                    velocity: example_box.velocity * -1.,
+                },
             },
         )?;
 
@@ -100,4 +101,21 @@ fn simulation_input(
     }
 
     Ok(())
+}
+
+fn render_example_boxes(mut gizmos: Gizmos, box_q: Query<&ExampleBox>) {
+    gizmos.circle(
+        Quat::from_rotation_x(std::f32::consts::FRAC_PI_2),
+        1.,
+        ORANGE,
+    );
+
+    for example_box in &box_q {
+        gizmos.cuboid(
+            Transform::from_translation(
+                Quat::from_rotation_y(example_box.position).mul_vec3(Vec3::NEG_Z),
+            ),
+            WHITE,
+        );
+    }
 }

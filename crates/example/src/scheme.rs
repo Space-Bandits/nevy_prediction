@@ -7,13 +7,16 @@ use nevy_prediction::common::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{networking::StreamHeader, simulation::SimulationPlugin};
+use crate::{
+    networking::StreamHeader,
+    simulation::{ExampleBox, SimulationPlugin},
+};
 
 pub struct PhysicsScheme;
 
 impl PredictionScheme for PhysicsScheme {
     fn updates() -> SchemeWorldUpdates {
-        SchemeWorldUpdates::default().with_message::<NewPhysicsBox>()
+        SchemeWorldUpdates::default().with_message::<UpdateExampleBox>()
     }
 
     fn message_header() -> impl Into<u16> {
@@ -29,7 +32,9 @@ impl PredictionScheme for PhysicsScheme {
     }
 }
 
+/// Spawns or updates an example box.
 #[derive(Serialize, Deserialize, Clone)]
-pub struct NewPhysicsBox {
+pub struct UpdateExampleBox {
     pub entity: SimulationEntity,
+    pub example_box: ExampleBox,
 }

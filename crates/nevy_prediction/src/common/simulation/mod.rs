@@ -75,6 +75,7 @@ where
     fn build(&self, app: &mut App) {
         app.insert_resource(self.instance);
 
+        app.add_schedule(Schedule::new(SimulationStartup));
         app.add_schedule(Schedule::new(SimulationUpdate));
         app.add_schedule(Schedule::new(ResetSimulation));
 

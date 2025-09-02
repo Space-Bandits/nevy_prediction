@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use bevy::{
     log::{Level, LogPlugin},
     prelude::*,
@@ -7,8 +5,8 @@ use bevy::{
 };
 use example::{
     networking::StreamHeader,
-    scheme::{NewPhysicsBox, PhysicsScheme},
-    simulation::PhysicsBox,
+    scheme::{PhysicsScheme, UpdateExampleBox},
+    simulation::ExampleBox,
 };
 use nevy_prediction::{common::simulation::UpdateQueue, server::*};
 
@@ -49,11 +47,11 @@ fn main() {
         (
             (
                 replicate_new_boxes,
-                initialize_physics_bodies,
-                reconcile_physics_bodies,
+                // initialize_physics_bodies,
+                // reconcile_boxes,
             )
                 .chain(),
-            accept_body_updates,
+            accept_box_updates,
         )
             .in_set(ServerSimulationSet::QueueUpdates),
     );
@@ -80,110 +78,76 @@ impl SimulationEntityAllocator {
 
 fn spawn_boxes(mut commands: Commands, mut allocator: ResMut<SimulationEntityAllocator>) {
     commands.spawn((
-        PhysicsBox,
+        ExampleBox {
+            position: 0.,
+            velocity: 1.,
+        },
         allocator.next(),
-        ReplicatePhysicsBody,
-        Position(Vec3::new(0., 3., 0.)),
     ));
 }
 
 fn replicate_new_boxes(
-    pairs: NewPairs<PredictionClient, PhysicsBox>,
-    box_q: Query<&SimulationEntity>,
-    mut updates: WorldUpdateSender<NewPhysicsBox>,
+    pairs: NewPairs<PredictionClient, ExampleBox>,
+    box_q: Query<(&SimulationEntity, &ExampleBox)>,
+    mut updates: WorldUpdateSender<UpdateExampleBox>,
 ) -> Result {
     for (client_entity, box_entity) in &pairs {
-        let &entity = box_q.get(box_entity)?;
+        let (&entity, example_box) = box_q.get(box_entity)?;
 
         updates.write_now(
             StreamHeader::Messages,
             client_entity,
-            NewPhysicsBox { entity },
-        )?;
-    }
-
-    Ok(())
-}
-
-#[derive(Component)]
-pub struct ReplicatePhysicsBody;
-
-fn initialize_physics_bodies(
-    pairs: NewPairs<PredictionClient, ReplicatePhysicsBody>,
-    body_q: Query<(
-        &SimulationEntity,
-        &Position,
-        &Rotation,
-        &LinearVelocity,
-        &AngularVelocity,
-    )>,
-    mut updates: WorldUpdateSender<UpdatePhysicsBody>,
-) -> Result {
-    for (client_entity, body_entity) in &pairs {
-        let (&entity, &position, &rotation, &linear_velocity, &angular_velocity) =
-            body_q.get(body_entity)?;
-
-        updates.write_now(
-            StreamHeader::Messages,
-            client_entity,
-            UpdatePhysicsBody {
+            UpdateExampleBox {
                 entity,
-                position,
-                rotation,
-                linear_velocity,
-                angular_velocity,
+                example_box: example_box.clone(),
             },
         )?;
+
+        debug!("Initialized a new example box");
     }
 
     Ok(())
 }
 
-const RECINCILE_BODIES_INTERVAL: Duration = Duration::from_millis(1000);
+// const RECINCILE_INTERVAL: Duration = Duration::from_millis(1000);
 
-fn reconcile_physics_bodies(
-    mut last_update: Local<Duration>,
-    time: Res<Time>,
-    body_q: Query<(
-        &SimulationEntity,
-        &Position,
-        &Rotation,
-        &LinearVelocity,
-        &AngularVelocity,
-    )>,
+// fn reconcile_boxes(
+//     mut last_update: Local<Duration>,
+//     time: Res<Time>,
+//     body_q: Query<(&SimulationEntity, &ExampleBox)>,
+//     client_q: Query<Entity, With<PredictionClient>>,
+//     mut updates: WorldUpdateSender<UpdatePhysicsBody>,
+// ) -> Result {
+//     if time.elapsed() < *last_update + RECINCILE_INTERVAL {
+//         return Ok(());
+//     }
+
+//     *last_update = time.elapsed();
+
+//     for (&entity, &position, &rotation, &linear_velocity, &angular_velocity) in &body_q {
+//         for client_entity in &client_q {
+//             updates.write_now(
+//                 StreamHeader::Messages,
+//                 client_entity,
+//                 UpdatePhysicsBody {
+//                     entity,
+//                     position,
+//                     rotation,
+//                     linear_velocity,
+//                     angular_velocity,
+//                 },
+//             )?;
+//         }
+//     }
+
+//     Ok(())
+// }
+
+fn accept_box_updates(
+    mut updates: UpdateRequests<UpdateExampleBox>,
+    mut queue: ResMut<UpdateQueue<UpdateExampleBox>>,
     client_q: Query<Entity, With<PredictionClient>>,
-    mut updates: WorldUpdateSender<UpdatePhysicsBody>,
-) -> Result {
-    if time.elapsed() < *last_update + RECINCILE_BODIES_INTERVAL {
-        return Ok(());
-    }
-
-    *last_update = time.elapsed();
-
-    for (&entity, &position, &rotation, &linear_velocity, &angular_velocity) in &body_q {
-        for client_entity in &client_q {
-            updates.write_now(
-                StreamHeader::Messages,
-                client_entity,
-                UpdatePhysicsBody {
-                    entity,
-                    position,
-                    rotation,
-                    linear_velocity,
-                    angular_velocity,
-                },
-            )?;
-        }
-    }
-
-    Ok(())
-}
-
-fn accept_body_updates(
-    mut updates: UpdateRequests<UpdatePhysicsBody>,
-    mut queue: ResMut<UpdateQueue<UpdatePhysicsBody>>,
-    client_q: Query<Entity, With<PredictionClient>>,
-    mut sender: WorldUpdateSender<UpdatePhysicsBody>,
+    mut sender: WorldUpdateSender<UpdateExampleBox>,
 ) -> Result {
     for (client_entity, update) in updates.drain() {
         debug!("client {} updated a physics body", client_entity);
