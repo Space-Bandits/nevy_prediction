@@ -45,7 +45,7 @@ pub struct StepSimulation;
 ///
 /// [SimulationPlugin] will advance [SimulationTime] up to this point whenever it's schedule runs.
 #[derive(Resource, Default, Deref, DerefMut)]
-pub struct SimulationTimeTarget(pub Duration);
+pub(crate) struct SimulationTimeTarget(pub Duration);
 
 /// Controls the fixed timestep of [SimulationTime]
 #[derive(Resource, Deref)]

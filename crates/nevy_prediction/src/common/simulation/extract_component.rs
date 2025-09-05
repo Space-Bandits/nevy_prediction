@@ -4,7 +4,7 @@ use bevy::{ecs::component::Mutable, prelude::*};
 
 use crate::{
     client::parallel_app::{ExtractSimulation, SourceWorld},
-    common::simulation::simulation_entity::ExtractSimulationEntities,
+    common::simulation::simulation_entity::ExtractSimulationEntitiesSystems,
     server::{SimulationEntity, SimulationEntityMap},
 };
 
@@ -24,7 +24,7 @@ where
     fn build(&self, app: &mut App) {
         app.add_systems(
             ExtractSimulation,
-            extract_component::<C>.after(ExtractSimulationEntities),
+            extract_component::<C>.after(ExtractSimulationEntitiesSystems),
         );
     }
 }

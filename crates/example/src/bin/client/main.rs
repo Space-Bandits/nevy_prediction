@@ -8,7 +8,7 @@ use example::{
     scheme::{PhysicsScheme, UpdateExampleBox},
     simulation::ExampleBox,
 };
-use nevy_prediction::{client::*, common::simulation::StepSimulation, server::SimulationEntity};
+use nevy_prediction::client::prelude::*;
 
 use crate::networking::ClientConnection;
 

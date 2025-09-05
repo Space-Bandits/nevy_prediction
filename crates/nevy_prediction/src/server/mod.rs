@@ -16,7 +16,13 @@ use crate::common::{
     },
 };
 
-pub use crate::common::simulation::simulation_entity::{SimulationEntity, SimulationEntityMap};
+pub mod prelude {
+pub use crate::common::simulation::{
+    UpdateQueue,
+    simulation_entity::{SimulationEntity, SimulationEntityMap},
+};
+
+};
 
 #[derive(SystemSet, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ServerSimulationSet {

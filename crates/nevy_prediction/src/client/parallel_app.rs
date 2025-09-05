@@ -117,10 +117,10 @@ async fn run_parallel_world(mut world: World, _log_time: bool) -> World {
     world
 }
 
-/// Schedule that extracts the simulation state from a [SourceWorld] into the current world.
+/// Schedule that extracts the simulation state from a [`SourceWorld`] into the current world.
 #[derive(ScheduleLabel, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ExtractSimulation;
 
-/// Holds the source world during the [ExtractSimulation] schedule.
+/// Holds the source world during the [`ExtractSimulation`] schedule.
 #[derive(Resource, Deref, DerefMut)]
 pub struct SourceWorld(pub World);

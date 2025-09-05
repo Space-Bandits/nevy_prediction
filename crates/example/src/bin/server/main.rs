@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use bevy::{
     log::{Level, LogPlugin},
     prelude::*,
@@ -8,7 +10,7 @@ use example::{
     scheme::{PhysicsScheme, UpdateExampleBox},
     simulation::ExampleBox,
 };
-use nevy_prediction::{common::simulation::UpdateQueue, server::*};
+use nevy_prediction::server::prelude::*;
 
 use crate::{new_pairs::NewPairs, state::JoinedClient};
 
@@ -45,12 +47,7 @@ fn main() {
     app.add_systems(
         Update,
         (
-            (
-                replicate_new_boxes,
-                // initialize_physics_bodies,
-                // reconcile_boxes,
-            )
-                .chain(),
+            (initialize_boxes, reconcile_boxes).chain(),
             accept_box_updates,
         )
             .in_set(ServerSimulationSet::QueueUpdates),
@@ -86,7 +83,7 @@ fn spawn_boxes(mut commands: Commands, mut allocator: ResMut<SimulationEntityAll
     ));
 }
 
-fn replicate_new_boxes(
+fn initialize_boxes(
     pairs: NewPairs<PredictionClient, ExampleBox>,
     box_q: Query<(&SimulationEntity, &ExampleBox)>,
     mut updates: WorldUpdateSender<UpdateExampleBox>,
@@ -109,39 +106,37 @@ fn replicate_new_boxes(
     Ok(())
 }
 
-// const RECINCILE_INTERVAL: Duration = Duration::from_millis(1000);
+const RECONCILE_INTERVAL: Duration = Duration::from_millis(1000);
 
-// fn reconcile_boxes(
-//     mut last_update: Local<Duration>,
-//     time: Res<Time>,
-//     body_q: Query<(&SimulationEntity, &ExampleBox)>,
-//     client_q: Query<Entity, With<PredictionClient>>,
-//     mut updates: WorldUpdateSender<UpdatePhysicsBody>,
-// ) -> Result {
-//     if time.elapsed() < *last_update + RECINCILE_INTERVAL {
-//         return Ok(());
-//     }
+/// Periodically generates updates that reconcile example boxes on the client back to their state on the server
+fn reconcile_boxes(
+    mut last_update: Local<Duration>,
+    time: Res<Time>,
+    box_q: Query<(&SimulationEntity, &ExampleBox)>,
+    client_q: Query<Entity, With<PredictionClient>>,
+    mut updates: WorldUpdateSender<UpdateExampleBox>,
+) -> Result {
+    if time.elapsed() < *last_update + RECONCILE_INTERVAL {
+        return Ok(());
+    }
 
-//     *last_update = time.elapsed();
+    *last_update = time.elapsed();
 
-//     for (&entity, &position, &rotation, &linear_velocity, &angular_velocity) in &body_q {
-//         for client_entity in &client_q {
-//             updates.write_now(
-//                 StreamHeader::Messages,
-//                 client_entity,
-//                 UpdatePhysicsBody {
-//                     entity,
-//                     position,
-//                     rotation,
-//                     linear_velocity,
-//                     angular_velocity,
-//                 },
-//             )?;
-//         }
-//     }
+    for (&entity, example_box) in &box_q {
+        for client_entity in &client_q {
+            updates.write_now(
+                StreamHeader::Messages,
+                client_entity,
+                UpdateExampleBox {
+                    entity,
+                    example_box: example_box.clone(),
+                },
+            )?;
+        }
+    }
 
-//     Ok(())
-// }
+    Ok(())
+}
 
 fn accept_box_updates(
     mut updates: UpdateRequests<UpdateExampleBox>,

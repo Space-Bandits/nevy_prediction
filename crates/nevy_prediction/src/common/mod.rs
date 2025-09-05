@@ -4,13 +4,19 @@ use bevy::prelude::*;
 use nevy::*;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
-use crate::common::{
-    scheme::PredictionScheme,
-    simulation::{ResetSimulation, SimulationStartup, WorldUpdate},
-};
+use crate::common::simulation::{ResetSimulation, SimulationStartup, WorldUpdate};
 
-pub mod scheme;
-pub mod simulation;
+pub(crate) mod scheme;
+pub(crate) mod simulation;
+
+pub use crate::client::parallel_app::{ExtractSimulation, SourceWorld};
+pub use scheme::{PredictionScheme, SchemeWorldUpdates};
+pub use simulation::{
+    ReadyUpdates, SimulationInstance, SimulationTime, SimulationUpdate,
+    extract_component::ExtractSimulationComponentPlugin,
+    extract_resource::ExtractSimulationResourcePlugin,
+    simulation_entity::{ExtractSimulationEntitiesSystems, SimulationEntity, SimulationEntityMap},
+};
 
 /// Build function run for the client and server app
 pub(crate) fn build<S>(app: &mut App)

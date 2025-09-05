@@ -6,8 +6,9 @@ use crate::{
     common::simulation::ResetSimulation,
 };
 
+/// System set where [`SimulationEntity`]s are extracted in [`ExtractSimulation`].
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ExtractSimulationEntities;
+pub struct ExtractSimulationEntitiesSystems;
 
 pub fn build(app: &mut App) {
     app.init_resource::<SimulationEntityMap>();
@@ -23,7 +24,7 @@ pub fn build(app: &mut App) {
             despawn_removed_simulation_entities,
         )
             .chain()
-            .in_set(ExtractSimulationEntities),
+            .in_set(ExtractSimulationEntitiesSystems),
     );
 
     app.add_systems(ResetSimulation, reset_simulation_entities);
@@ -85,9 +86,10 @@ fn remove_simulation_entity(
     Ok(())
 }
 
+/// Marker component used to determine which simulation entities but no longer exist in the source world.
 #[derive(Component)]
 #[component(storage = "SparseSet")]
-pub struct RemovedSimulationEntity;
+struct RemovedSimulationEntity;
 
 fn mark_removed_simulation_entities(
     mut commands: Commands,

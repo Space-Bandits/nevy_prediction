@@ -1,10 +1,7 @@
 use std::time::Duration;
 
 use bevy::prelude::*;
-use nevy_prediction::common::{
-    scheme::{PredictionScheme, SchemeWorldUpdates},
-    simulation::simulation_entity::SimulationEntity,
-};
+use nevy_prediction::common::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::{

@@ -13,18 +13,29 @@ use crate::{
         server_world_app::ServerWorld,
     },
     common::{
-        RequestWorldUpdate, ResetClientSimulation,
+        RequestWorldUpdate, ResetClientSimulation, SimulationInstance, SimulationTime,
         scheme::PredictionScheme,
         simulation::{
-            ResetSimulation, SimulationInstance, SimulationPlugin, SimulationTime,
-            SimulationTimeTarget, StepSimulation, UpdateQueue, WorldUpdate,
+            ResetSimulation, SimulationPlugin, SimulationTimeTarget, StepSimulation, UpdateQueue,
+            WorldUpdate,
         },
     },
 };
 
-pub mod parallel_app;
-pub mod prediction_app;
-pub mod server_world_app;
+pub(crate) mod parallel_app;
+pub(crate) mod prediction_app;
+pub(crate) mod server_world_app;
+
+pub mod prelude {
+    pub use crate::client::{
+        ClientSimulationSet, NevyPredictionClientPlugin, PredictionServerConnection,
+        PredictionUpdateSender,
+    };
+    pub use crate::common::simulation::{
+        StepSimulation,
+        simulation_entity::{SimulationEntity, SimulationEntityMap},
+    };
+}
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ClientSimulationSet {
@@ -48,8 +59,8 @@ pub enum ClientSimulationSet {
 }
 
 pub struct NevyPredictionClientPlugin<S> {
-    pub _p: PhantomData<S>,
-    pub schedule: Interned<dyn ScheduleLabel>,
+    pub(crate) _p: PhantomData<S>,
+    pub(crate) schedule: Interned<dyn ScheduleLabel>,
 }
 
 impl<S> Default for NevyPredictionClientPlugin<S> {
