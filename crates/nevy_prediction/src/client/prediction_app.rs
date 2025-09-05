@@ -9,7 +9,7 @@ use crate::{
     client::{
         ClientSimulationSet,
         parallel_app::{ExtractSimulation, ParallelWorld, SourceWorld},
-        server_world_app::{ServerWorld, ServerWorldTime},
+        server_world_app::ServerWorld,
     },
     common::{
         scheme::PredictionScheme,
@@ -227,13 +227,21 @@ impl<T> Default for PredictionUpdates<T> {
 }
 
 fn drain_prediction_updates<T>(
-    server_time: Res<ServerWorldTime>,
     mut updates: ResMut<PredictionUpdates<T>>,
+    mut prediction_world: NonSendMut<PredictionWorld>,
 ) where
     T: Send + Sync + 'static,
 {
+    let Some(prediction_world) = prediction_world.world.get() else {
+        return;
+    };
+
+    let reconciled_time = prediction_world
+        .resource::<Time<SimulationTime>>()
+        .elapsed();
+
     while let Some(front) = updates.front() {
-        if front.time < **server_time {
+        if front.time < reconciled_time {
             updates.pop_front();
         } else {
             break;

@@ -104,8 +104,6 @@ fn apply_update_boxes(
             };
 
             *current_box = example_box;
-
-            debug!("Updated an example box");
         } else {
             commands.spawn((example_box, entity));
 

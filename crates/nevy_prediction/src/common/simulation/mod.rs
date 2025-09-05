@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::common::scheme::PredictionScheme;
 
 pub mod extract_component;
+pub mod extract_resource;
 pub mod simulation_entity;
 
 /// This schedule runs on a fixed timestep with [SimulationTime].

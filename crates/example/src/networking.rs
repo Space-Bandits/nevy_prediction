@@ -5,10 +5,8 @@ pub fn build(app: &mut App) {
     app.add_plugins((
         NevyPlugin::default(),
         NevyHeaderPlugin::default(),
-        NevyMessagesPlugin::default(),
+        NevyMessagesPlugin::new(StreamHeader::Messages),
     ));
-
-    app.insert_resource(MessageStreamHeader::new(StreamHeader::Messages));
 
     app.add_systems(PostUpdate, log_connection_status.after(UpdateEndpoints));
 }

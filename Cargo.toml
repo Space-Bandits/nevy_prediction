@@ -4,4 +4,4 @@ resolver = "2"
 
 [workspace.dependencies]
 bevy = { version = "0.16", default-features = false }
-nevy.git = "https://github.com/Space-Bandits/nevy"
+nevy = "0.1"

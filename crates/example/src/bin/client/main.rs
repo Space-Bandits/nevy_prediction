@@ -8,7 +8,7 @@ use example::{
     scheme::{PhysicsScheme, UpdateExampleBox},
     simulation::ExampleBox,
 };
-use nevy_prediction::{client::*, server::SimulationEntity};
+use nevy_prediction::{client::*, common::simulation::StepSimulation, server::SimulationEntity};
 
 use crate::networking::ClientConnection;
 
@@ -34,7 +34,7 @@ fn main() {
     app.add_systems(
         Update,
         (
-            render_example_boxes,
+            render_example_boxes.after(StepSimulation),
             simulation_input.in_set(ClientSimulationSet::QueueUpdates),
         ),
     );

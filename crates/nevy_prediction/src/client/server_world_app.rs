@@ -100,6 +100,8 @@ fn receive_world_updates<T>(
             }
 
             world.resource_mut::<UpdateQueue<T>>().insert(update);
+
+            debug!("queued an update to the server world");
         }
     }
 }
