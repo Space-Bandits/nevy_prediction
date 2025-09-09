@@ -1,14 +1,11 @@
 use bevy::{platform::collections::HashMap, prelude::*};
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    client::parallel_app::{ExtractSimulation, SourceWorld},
-    common::simulation::ResetSimulation,
-};
+use crate::common::simulation::{ExtractSimulation, ResetSimulation, SourceWorld};
 
 /// System set where [`SimulationEntity`]s are extracted in [`ExtractSimulation`].
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ExtractSimulationEntitiesSystems;
+pub struct ExtractSimulationEntitySystems;
 
 pub fn build(app: &mut App) {
     app.init_resource::<SimulationEntityMap>();
@@ -24,20 +21,20 @@ pub fn build(app: &mut App) {
             despawn_removed_simulation_entities,
         )
             .chain()
-            .in_set(ExtractSimulationEntitiesSystems),
+            .in_set(ExtractSimulationEntitySystems),
     );
 
     app.add_systems(ResetSimulation, reset_simulation_entities);
 }
 
-/// This component is a unique id that can be used to map entities across all instances of the simulation.
+/// This component is a unique id that can be used to map entities across instances of the simulation.
 ///
 /// Use this component in your world updates and when extracting data between simulation instances to identify an entity.
 ///
 /// Entities with this component will be automatically spawned and despawned
-/// during the [ExtractSimulation] schedule in the [ExtractSimulationEntities] system set.
-/// You can then utilize the [SimulationEntityMap] from the [SourceWorld]
-/// to map a [SimulationEntity] in the source world to the current world.
+/// during the [`ExtractSimulation`] schedule in the [`ExtractSimulationEntitiesSystems`] system set.
+/// If you order an extract system to run after this system set you can use the [`SimulationEntity`] on an entity
+/// in the [`SourceWorld`] to identify its corresponding entity in the local world with the local [`SimulationEntityMap`].
 ///
 /// Entities with this component will be despawned when the [ResetSimulation] schedule runs,
 /// so if you have many types of entities with this component you don't have to create a system that despawns
@@ -46,7 +43,7 @@ pub fn build(app: &mut App) {
 #[component(immutable)]
 pub struct SimulationEntity(pub u64);
 
-/// This component is updated using lifecycle hooks of [SimulationEntity] to track which [Entity]
+/// This component is updated using the lifecycle hooks of [SimulationEntity] to track which [Entity]
 /// in the local world belongs to a [SimulationEntity].
 #[derive(Resource, Default)]
 pub struct SimulationEntityMap {
@@ -55,11 +52,13 @@ pub struct SimulationEntityMap {
 }
 
 impl SimulationEntityMap {
+    /// Gets the local entity corresponding to the given simulation entity if it exists.
     pub fn get(&self, id: SimulationEntity) -> Option<Entity> {
         self.map.get(&id).copied()
     }
 }
 
+/// Observer to add a simulation entity to the map.
 fn add_simulation_entity(
     trigger: Trigger<OnInsert, SimulationEntity>,
     entity_q: Query<&SimulationEntity>,
@@ -73,6 +72,7 @@ fn add_simulation_entity(
     Ok(())
 }
 
+/// Observer to remove a simulation entity from the map.
 fn remove_simulation_entity(
     trigger: Trigger<OnReplace, SimulationEntity>,
     entity_q: Query<&SimulationEntity>,
@@ -91,6 +91,7 @@ fn remove_simulation_entity(
 #[component(storage = "SparseSet")]
 struct RemovedSimulationEntity;
 
+/// Marks every simulation entity in the local world with a [`RemovedSimulationEntity`] component.
 fn mark_removed_simulation_entities(
     mut commands: Commands,
     entity_q: Query<Entity, With<SimulationEntity>>,
@@ -100,6 +101,11 @@ fn mark_removed_simulation_entities(
     }
 }
 
+/// Extracts simulation entities from the source world and spawns them in the local world.
+///
+/// If a simulation entity doesn't exist in the local world, it is spawned.
+///
+/// If a simulation entity exists in the local world, the [`RemovedSimulationEntity`] component is removed.
 fn extract_simulation_entities(
     mut commands: Commands,
     map: Res<SimulationEntityMap>,
@@ -119,6 +125,7 @@ fn extract_simulation_entities(
     }
 }
 
+/// Despawns any entities that don't have a corresponding simulation entity in the source world, as determined by [`extract_simulation_entities`].
 fn despawn_removed_simulation_entities(
     mut commands: Commands,
     entity_q: Query<Entity, With<RemovedSimulationEntity>>,
@@ -128,6 +135,7 @@ fn despawn_removed_simulation_entities(
     }
 }
 
+/// Despawns all simulation entities when the simulation is reset.
 fn reset_simulation_entities(
     mut commands: Commands,
     entity_q: Query<Entity, With<SimulationEntity>>,

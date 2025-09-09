@@ -8,26 +8,31 @@ use nevy::*;
 use serde::Serialize;
 
 use crate::common::{
-    RequestWorldUpdate, ResetClientSimulation, ServerWorldUpdate, UpdateServerTime,
+    ResetClientSimulation, ServerWorldUpdate, UpdateServerTime,
     scheme::PredictionScheme,
     simulation::{
         SimulationInstance, SimulationPlugin, SimulationTime, SimulationTimeTarget,
-        SimulationUpdate, StepSimulation, WorldUpdate,
+        SimulationUpdate, StepSimulationSystems, WorldUpdate,
     },
 };
 
 pub mod prelude {
-pub use crate::common::simulation::{
-    UpdateQueue,
-    simulation_entity::{SimulationEntity, SimulationEntityMap},
-};
-
-};
+    pub use crate::{
+        common::simulation::{
+            WorldUpdateQueue,
+            simulation_entity::{SimulationEntity, SimulationEntityMap},
+        },
+        server::{
+            NevyPredictionServerPlugin, PredictionClient, ServerSimulationSystems,
+            WorldUpdateSender,
+        },
+    };
+}
 
 #[derive(SystemSet, Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum ServerSimulationSet {
-    QueueUpdates,
-    RunSimulation,
+pub enum ServerSimulationSystems {
+    QueueUpdatesSystems,
+    RunSimulationSystems,
 }
 
 pub struct NevyPredictionServerPlugin<S> {
@@ -65,8 +70,8 @@ where
         app.configure_sets(
             self.schedule,
             (
-                ServerSimulationSet::QueueUpdates,
-                ServerSimulationSet::RunSimulation,
+                ServerSimulationSystems::QueueUpdatesSystems,
+                ServerSimulationSystems::RunSimulationSystems,
             )
                 .chain(),
         );
@@ -79,13 +84,13 @@ where
 
         app.configure_sets(
             self.schedule,
-            StepSimulation.in_set(ServerSimulationSet::RunSimulation),
+            StepSimulationSystems.in_set(ServerSimulationSystems::RunSimulationSystems),
         );
 
         app.add_systems(
             self.schedule,
             (drive_simulation_time, send_simulation_resets::<S>)
-                .in_set(ServerSimulationSet::QueueUpdates),
+                .in_set(ServerSimulationSystems::QueueUpdatesSystems),
         );
 
         app.add_systems(SimulationUpdate, send_simulation_time_updates::<S>);
@@ -164,8 +169,16 @@ where
 
 /// Use this system parameter to send world updates to clients.
 ///
-/// These updates will be timestamped to be applied in the next simulation step.
-/// To ensure that the updates are applied properly they should be sent in [ServerSimulationSet::QueueUpdates].
+/// Which updates are sent to the clients is not controlled by this crate.
+/// You must implement your own logic that sends state updates of the simulation to clients.
+///
+/// If your simulation is deterministic, you only need to send changes.
+/// If it isn't you should periodically refresh the full state of the simulation.
+///
+/// Additionally, you don't need to update the entire simulation.
+/// You can implement logic that only informs the client about changes that are relevant to it.
+/// This could be the case for a large world, where you only send updates for the client's local area,
+/// or it could be the case for a competitive game where some clients should have information that others don't.
 #[derive(SystemParam)]
 pub struct WorldUpdateSender<'w, 's, T>
 where
@@ -180,13 +193,23 @@ impl<'w, 's, T> WorldUpdateSender<'w, 's, T>
 where
     T: Send + Sync + 'static,
 {
-    pub fn write_now(&mut self, header: impl Into<u16>, client_entity: Entity, update: T) -> Result
+    /// Sends a [`nevy`] message containing a [`WorldUpdate`] with the current simulation time.
+    ///
+    /// See [`SharedMessageSender::write`].
+    pub fn write_now(
+        &mut self,
+        header: impl Into<u16>,
+        client_entity: Entity,
+        queue: bool,
+        update: T,
+    ) -> Result<bool>
     where
         T: Serialize,
     {
         self.write(
             header,
             client_entity,
+            queue,
             WorldUpdate {
                 time: self.time.elapsed(),
                 update,
@@ -194,12 +217,18 @@ where
         )
     }
 
+    /// Sends a [`nevy`] message containing a [`WorldUpdate`].
+    ///
+    /// If you want to send an update with the current simulation time, use [`Self::write_now`].
+    ///
+    /// See [`SharedMessageSender::write`].
     pub fn write(
         &mut self,
         header: impl Into<u16>,
         client_entity: Entity,
+        queue: bool,
         update: WorldUpdate<T>,
-    ) -> Result
+    ) -> Result<bool>
     where
         T: Serialize,
     {
@@ -207,52 +236,13 @@ where
             header,
             client_entity,
             *self.message_id,
-            true,
+            queue,
             &ServerWorldUpdate { update },
-        )?;
-
-        Ok(())
+        )
     }
-}
 
-#[derive(SystemParam)]
-pub struct UpdateRequests<'w, 's, T>
-where
-    T: Send + Sync + 'static,
-{
-    client_q: Query<
-        'w,
-        's,
-        (
-            Entity,
-            &'static mut ReceivedMessages<RequestWorldUpdate<T>>,
-            Has<PredictionClient>,
-        ),
-    >,
-}
-
-impl<'w, 's, T> UpdateRequests<'w, 's, T>
-where
-    T: Send + Sync + 'static,
-{
-    pub fn drain(&mut self) -> impl Iterator<Item = (Entity, WorldUpdate<T>)> {
-        let mut updates = Vec::new();
-
-        for (connection_entity, mut messages, is_client) in &mut self.client_q {
-            for RequestWorldUpdate { update } in messages.drain() {
-                if !is_client {
-                    warn!(
-                        "Received a prediction message from a connection that isn't a client: {}",
-                        connection_entity
-                    );
-
-                    continue;
-                }
-
-                updates.push((connection_entity, update));
-            }
-        }
-
-        updates.into_iter()
+    /// Gets the underlying [`SharedMessageSender`], for stream operations.
+    pub fn sender(&mut self) -> &mut SharedMessageSender<'w, 's, SimulationUpdatesStream> {
+        &mut self.sender
     }
 }

@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use nevy::AddMessage;
 use serde::{Deserialize, Serialize};
 
 pub mod networking;
@@ -9,7 +10,7 @@ pub mod simulation;
 pub fn build(app: &mut App) {
     networking::build(app);
 
-    // app.add_plugins(plugins)
+    app.add_message::<scheme::RequestUpdateExampleBox>();
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]

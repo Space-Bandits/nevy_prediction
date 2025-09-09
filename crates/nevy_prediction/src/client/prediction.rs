@@ -6,16 +6,13 @@ use bevy::{
 };
 
 use crate::{
-    client::{
-        ClientSimulationSet,
-        parallel_app::{ExtractSimulation, ParallelWorld, SourceWorld},
-        server_world_app::ServerWorld,
-    },
+    client::{ClientSimulationSystems, parallel_app::ParallelWorld, server_world::ServerWorld},
     common::{
+        prelude::{ExtractSimulation, SourceWorld},
         scheme::PredictionScheme,
         simulation::{
             SimulationInstance, SimulationPlugin, SimulationStartup, SimulationTime,
-            SimulationTimeTarget, UpdateQueue, WorldUpdate,
+            SimulationTimeTarget, WorldUpdate, WorldUpdateQueue,
         },
     },
 };
@@ -30,16 +27,17 @@ where
     app.add_systems(
         schedule,
         (
-            poll_prediction_world.in_set(ClientSimulationSet::PollParallelApps),
+            poll_prediction_world.in_set(ClientSimulationSystems::PollParallelAppsSystems),
             (
                 set_prediction_target,
                 extract_predicton_world,
                 extract_server_world,
             )
                 .chain()
-                .in_set(ClientSimulationSet::ExtractPredictionWorlds),
-            set_prediction_wrold_extracted.after(ClientSimulationSet::ReapplyNewWorldUpdates),
-            run_prediction_app.in_set(ClientSimulationSet::RunPredictionApps),
+                .in_set(ClientSimulationSystems::ExtractSimulationsSystems),
+            set_prediction_wrold_extracted
+                .after(ClientSimulationSystems::ReapplyNewWorldUpdatesSystems),
+            run_prediction_app.in_set(ClientSimulationSystems::RunParallelAppsSystems),
         ),
     );
 }
@@ -53,16 +51,19 @@ where
     app.add_systems(
         schedule,
         (
-            reapply_new_world_updates::<T>.in_set(ClientSimulationSet::ReapplyNewWorldUpdates),
+            reapply_new_world_updates::<T>
+                .in_set(ClientSimulationSystems::ReapplyNewWorldUpdatesSystems),
             (drain_prediction_updates::<T>, queue_prediction_updates::<T>)
-                .in_set(ClientSimulationSet::QueuePredictionAppUpdates),
+                .in_set(ClientSimulationSystems::QueuePredictionAppUpdatesSystems),
         ),
     );
 }
 
+/// Controls how far prediction is run.
 #[derive(Resource, Default, Deref, DerefMut)]
-pub(crate) struct PredictionInterval(pub Duration);
+pub struct PredictionInterval(pub Duration);
 
+/// Contains the [`ParallelWorld`] used for prediction.
 pub(crate) struct PredictionWorld {
     pub world: ParallelWorld,
     /// whether the finished predicted world has been extracted into the main app.
@@ -214,7 +215,7 @@ fn run_prediction_app(mut prediction_app: NonSendMut<PredictionWorld>) {
     prediction_app.extracted = false;
 }
 
-/// This is a sorted list of world updates that haven't been reconciled with the server.
+/// Contains a sorted list of world updates that haven't been reconciled with the server.
 ///
 /// These updates get added to the update queue of the prediction app before it is run.
 #[derive(Resource, Deref, DerefMut)]
@@ -263,7 +264,7 @@ fn queue_prediction_updates<T>(
         return;
     };
 
-    let mut queue = world.resource_mut::<UpdateQueue<T>>();
+    let mut queue = world.resource_mut::<WorldUpdateQueue<T>>();
 
     for update in prediction_updates.iter().cloned() {
         queue.insert(update);
@@ -271,12 +272,12 @@ fn queue_prediction_updates<T>(
 }
 
 /// When the prediction world finishes, it will not contain any predicted world upates that were added while it was running.
-/// This system adds any updates that are newer than it's current simulation time
+/// This system adds any updates that are newer than it's current simulation time, which will then be "predicted" on the main app.
 fn reapply_new_world_updates<T>(
     mut prediction_world: NonSendMut<PredictionWorld>,
     predicted_time: Res<Time<SimulationTime>>,
     prediction_updates: Res<PredictionUpdates<T>>,
-    mut prediction_queue: ResMut<UpdateQueue<T>>,
+    mut prediction_queue: ResMut<WorldUpdateQueue<T>>,
 ) where
     T: Send + Sync + 'static + Clone,
 {
@@ -290,12 +291,6 @@ fn reapply_new_world_updates<T>(
 
     for update in prediction_updates.iter() {
         if update.time >= predicted_time.elapsed() {
-            debug!(
-                "reapplied update for time {} at {}",
-                update.time.as_millis(),
-                predicted_time.elapsed().as_millis()
-            );
-
             prediction_queue.insert(update.clone());
         }
     }

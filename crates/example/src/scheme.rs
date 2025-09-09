@@ -35,3 +35,9 @@ pub struct UpdateExampleBox {
     pub entity: SimulationEntity,
     pub example_box: ExampleBox,
 }
+
+/// Client -> Server message to request an update to an example box.
+#[derive(Serialize, Deserialize)]
+pub struct RequestUpdateExampleBox {
+    pub update: WorldUpdate<UpdateExampleBox>,
+}

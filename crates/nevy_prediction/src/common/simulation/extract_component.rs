@@ -2,13 +2,14 @@ use std::marker::PhantomData;
 
 use bevy::{ecs::component::Mutable, prelude::*};
 
-use crate::{
-    client::parallel_app::{ExtractSimulation, SourceWorld},
-    common::simulation::simulation_entity::ExtractSimulationEntitiesSystems,
-    server::{SimulationEntity, SimulationEntityMap},
+use crate::common::simulation::{
+    ExtractSimulation, SourceWorld,
+    simulation_entity::{ExtractSimulationEntitySystems, SimulationEntity, SimulationEntityMap},
 };
 
-/// This plugin acts as a utility to automatically extract a component on a [SimulationEntity].
+/// This plugin is a utility to automatically extract components on [`SimulationEntity`]s.
+///
+/// It will add the component to the local entity if it doesn't exist but it will not remove it if it is removed from the [`SourceWorld`].
 pub struct ExtractSimulationComponentPlugin<C>(PhantomData<C>);
 
 impl<C> Default for ExtractSimulationComponentPlugin<C> {
@@ -24,7 +25,7 @@ where
     fn build(&self, app: &mut App) {
         app.add_systems(
             ExtractSimulation,
-            extract_component::<C>.after(ExtractSimulationEntitiesSystems),
+            extract_component::<C>.after(ExtractSimulationEntitySystems),
         );
     }
 }

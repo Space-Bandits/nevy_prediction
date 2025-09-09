@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use bevy::prelude::*;
 
-use crate::client::parallel_app::{ExtractSimulation, SourceWorld};
+use crate::common::simulation::{ExtractSimulation, SourceWorld};
 
 /// This plugin acts as a utility to automatically extract a resource.
 pub struct ExtractSimulationResourcePlugin<R>(PhantomData<R>);

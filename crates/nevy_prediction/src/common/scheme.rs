@@ -6,7 +6,9 @@ use bevy::{
 };
 use serde::{Serialize, de::DeserializeOwned};
 
-/// Implement this trait on a type to define a prediction scheme.
+/// This trait defines a prediction scheme that controls how the client and server interact.
+///
+/// Implement this trait on a marker type to define a prediction scheme.
 pub trait PredictionScheme: Send + Sync + 'static {
     fn updates() -> SchemeWorldUpdates;
 
@@ -21,12 +23,13 @@ pub trait PredictionScheme: Send + Sync + 'static {
     }
 }
 
-/// Defines a list of updates that can modify the predicted world.
+/// Defines a list of updates that are the only way of modifing the simulation.
 ///
-/// World updates provide a way of recording changes to the predicted world.
-/// This is used for prediction, reconciliation and initializing and updating client side worlds.
+/// Because these are the only way of modifying the simulation,
+/// they can be handled by prediction logic.
 pub struct SchemeWorldUpdates(pub(crate) Vec<Box<dyn SchemeUpdate>>);
 
+/// Provides builder functions for a type of update.
 pub(crate) trait SchemeUpdate {
     fn build_common(&self, app: &mut App);
 
@@ -65,6 +68,10 @@ impl Default for SchemeWorldUpdates {
 }
 
 impl SchemeWorldUpdates {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
     /// Adds an update message to this scheme.
     ///
     /// This will "assign" this message type to this scheme,

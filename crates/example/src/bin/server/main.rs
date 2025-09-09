@@ -7,9 +7,10 @@ use bevy::{
 };
 use example::{
     networking::StreamHeader,
-    scheme::{PhysicsScheme, UpdateExampleBox},
+    scheme::{PhysicsScheme, RequestUpdateExampleBox, UpdateExampleBox},
     simulation::ExampleBox,
 };
+use nevy::ReceivedMessages;
 use nevy_prediction::server::prelude::*;
 
 use crate::{new_pairs::NewPairs, state::JoinedClient};
@@ -47,10 +48,10 @@ fn main() {
     app.add_systems(
         Update,
         (
-            (initialize_boxes, reconcile_boxes).chain(),
+            (initialize_boxes, refresh_boxes).chain(),
             accept_box_updates,
         )
-            .in_set(ServerSimulationSet::QueueUpdates),
+            .in_set(ServerSimulationSystems::QueueUpdatesSystems),
     );
 
     app.run();
@@ -94,6 +95,7 @@ fn initialize_boxes(
         updates.write_now(
             StreamHeader::Messages,
             client_entity,
+            true,
             UpdateExampleBox {
                 entity,
                 example_box: example_box.clone(),
@@ -108,8 +110,10 @@ fn initialize_boxes(
 
 const RECONCILE_INTERVAL: Duration = Duration::from_millis(1000);
 
-/// Periodically generates updates that reconcile example boxes on the client back to their state on the server
-fn reconcile_boxes(
+/// Periodically generates updates that refresh the state of example boxes.
+///
+/// This is needed for non-deterministic simulations that would diverge without periodic updates.
+fn refresh_boxes(
     mut last_update: Local<Duration>,
     time: Res<Time>,
     box_q: Query<(&SimulationEntity, &ExampleBox)>,
@@ -127,6 +131,7 @@ fn reconcile_boxes(
             updates.write_now(
                 StreamHeader::Messages,
                 client_entity,
+                false, // not a critical message, so don't waste bandwidth if not needed
                 UpdateExampleBox {
                     entity,
                     example_box: example_box.clone(),
@@ -139,19 +144,21 @@ fn reconcile_boxes(
 }
 
 fn accept_box_updates(
-    mut updates: UpdateRequests<UpdateExampleBox>,
-    mut queue: ResMut<UpdateQueue<UpdateExampleBox>>,
+    mut update_client_q: Query<(Entity, &mut ReceivedMessages<RequestUpdateExampleBox>)>,
     client_q: Query<Entity, With<PredictionClient>>,
+    mut queue: ResMut<WorldUpdateQueue<UpdateExampleBox>>,
     mut sender: WorldUpdateSender<UpdateExampleBox>,
 ) -> Result {
-    for (client_entity, update) in updates.drain() {
-        debug!("client {} updated a physics body", client_entity);
+    for (update_client_entity, mut messages) in &mut update_client_q {
+        for RequestUpdateExampleBox { update } in messages.drain() {
+            debug!("accepted an update from {}", update_client_entity);
 
-        for client_entity in &client_q {
-            sender.write(StreamHeader::Messages, client_entity, update.clone())?;
+            for client_entity in &client_q {
+                sender.write(StreamHeader::Messages, client_entity, true, update.clone())?;
+            }
+
+            queue.insert(update);
         }
-
-        queue.insert(update);
     }
 
     Ok(())

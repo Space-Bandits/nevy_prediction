@@ -1,8 +1,9 @@
+//! Contains logic for running schedules on a world asynchronously to the main app.
+
 use std::time::Duration;
 
 use bevy::{
     app::PluginsState,
-    ecs::schedule::ScheduleLabel,
     prelude::*,
     tasks::{AsyncComputeTaskPool, Task, block_on, poll_once},
 };
@@ -116,11 +117,3 @@ async fn run_parallel_world(mut world: World, _log_time: bool) -> World {
 
     world
 }
-
-/// Schedule that extracts the simulation state from a [`SourceWorld`] into the current world.
-#[derive(ScheduleLabel, Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ExtractSimulation;
-
-/// Holds the source world during the [`ExtractSimulation`] schedule.
-#[derive(Resource, Deref, DerefMut)]
-pub struct SourceWorld(pub World);

@@ -5,57 +5,57 @@ use bevy::{
     prelude::*,
 };
 use nevy::*;
-use serde::Serialize;
 
 use crate::{
     client::{
-        prediction_app::{PredictionInterval, PredictionUpdates, PredictionWorld},
-        server_world_app::ServerWorld,
+        prediction::{PredictionInterval, PredictionUpdates, PredictionWorld},
+        server_world::ServerWorld,
     },
     common::{
-        RequestWorldUpdate, ResetClientSimulation, SimulationInstance, SimulationTime,
+        ResetClientSimulation,
         scheme::PredictionScheme,
         simulation::{
-            ResetSimulation, SimulationPlugin, SimulationTimeTarget, StepSimulation, UpdateQueue,
-            WorldUpdate,
+            ResetSimulation, SimulationInstance, SimulationPlugin, SimulationTime,
+            SimulationTimeTarget, StepSimulationSystems, WorldUpdate,
         },
     },
+    server::prelude::WorldUpdateQueue,
 };
 
 pub(crate) mod parallel_app;
-pub(crate) mod prediction_app;
-pub(crate) mod server_world_app;
+pub mod prediction;
+pub(crate) mod server_world;
 
 pub mod prelude {
     pub use crate::client::{
-        ClientSimulationSet, NevyPredictionClientPlugin, PredictionServerConnection,
-        PredictionUpdateSender,
+        ClientSimulationSystems, NevyPredictionClientPlugin, PredictionServerConnection,
+        PredictionUpdateCreator, prediction::PredictionInterval,
     };
     pub use crate::common::simulation::{
-        StepSimulation,
+        StepSimulationSystems,
         simulation_entity::{SimulationEntity, SimulationEntityMap},
     };
 }
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
-pub enum ClientSimulationSet {
+pub enum ClientSimulationSystems {
     /// Parallel apps are polled for completion.
-    PollParallelApps,
+    PollParallelAppsSystems,
     /// Simulations get reset by the server.
-    ResetSimulations,
+    ResetSimulationSystems,
     /// Simulation time updates are received by the server.
-    ReceiveTime,
+    ReceiveTimeSystems,
     /// The prediction app is extracted into the main world
     /// The server world app is extracted into the prediction app
-    ExtractPredictionWorlds,
+    ExtractSimulationsSystems,
     /// Reapply world updates that have been added while the prediction world was running
-    ReapplyNewWorldUpdates,
+    ReapplyNewWorldUpdatesSystems,
     /// User queues world updates.
-    QueueUpdates,
+    QueueUpdatesSystems,
     /// Predicted updates are queued to the prediction world.
-    QueuePredictionAppUpdates,
+    QueuePredictionAppUpdatesSystems,
     /// Prediction apps are run.
-    RunPredictionApps,
+    RunParallelAppsSystems,
 }
 
 pub struct NevyPredictionClientPlugin<S> {
@@ -80,22 +80,22 @@ where
         app.configure_sets(
             self.schedule,
             (
-                ClientSimulationSet::PollParallelApps,
-                ClientSimulationSet::ResetSimulations,
-                ClientSimulationSet::ReceiveTime,
-                ClientSimulationSet::ExtractPredictionWorlds,
-                ClientSimulationSet::ReapplyNewWorldUpdates,
-                ClientSimulationSet::QueueUpdates,
-                ClientSimulationSet::QueuePredictionAppUpdates,
-                ClientSimulationSet::RunPredictionApps,
+                ClientSimulationSystems::PollParallelAppsSystems,
+                ClientSimulationSystems::ResetSimulationSystems,
+                ClientSimulationSystems::ReceiveTimeSystems,
+                ClientSimulationSystems::ExtractSimulationsSystems,
+                ClientSimulationSystems::ReapplyNewWorldUpdatesSystems,
+                ClientSimulationSystems::QueueUpdatesSystems,
+                ClientSimulationSystems::QueuePredictionAppUpdatesSystems,
+                ClientSimulationSystems::RunParallelAppsSystems,
             )
                 .chain()
-                .before(StepSimulation),
+                .before(StepSimulationSystems),
         );
 
         crate::common::build::<S>(app);
-        server_world_app::build::<S>(app, self.schedule);
-        prediction_app::build::<S>(app, self.schedule);
+        server_world::build::<S>(app, self.schedule);
+        prediction::build::<S>(app, self.schedule);
 
         app.add_plugins(SimulationPlugin::<S> {
             _p: PhantomData,
@@ -108,8 +108,8 @@ where
             (
                 receive_reset_simulations
                     .pipe(reset_simulations)
-                    .in_set(ClientSimulationSet::ResetSimulations),
-                drive_simulation_time.in_set(ClientSimulationSet::ReceiveTime),
+                    .in_set(ClientSimulationSystems::ResetSimulationSystems),
+                drive_simulation_time.in_set(ClientSimulationSystems::ReceiveTimeSystems),
             ),
         );
 
@@ -124,8 +124,8 @@ pub(crate) fn build_update<T>(app: &mut App, schedule: Interned<dyn ScheduleLabe
 where
     T: Send + Sync + 'static + Clone,
 {
-    server_world_app::build_update::<T>(app, schedule);
-    prediction_app::build_update::<T>(app, schedule);
+    server_world::build_update::<T>(app, schedule);
+    prediction::build_update::<T>(app, schedule);
 }
 
 /// Marker component that must be inserted onto the server connection entity for prediction.
@@ -187,62 +187,37 @@ fn reset_simulations(In(reset): In<Option<Duration>>, world: &mut World) {
 }
 
 #[derive(SystemParam)]
-pub struct PredictionUpdateSender<'w, 's, T>
+pub struct PredictionUpdateCreator<'w, T>
 where
     T: Send + Sync + 'static,
 {
     time: Res<'w, Time<SimulationTime>>,
-    simulation_queue: ResMut<'w, UpdateQueue<T>>,
+    simulation_queue: ResMut<'w, WorldUpdateQueue<T>>,
     prediction_updates: ResMut<'w, PredictionUpdates<T>>,
-    connection_q: Query<'w, 's, Entity, With<PredictionServerConnection>>,
-    message_sender: LocalMessageSender<'w, 's>,
-    message_id: Res<'w, MessageId<RequestWorldUpdate<T>>>,
 }
 
-impl<'w, 's, T> PredictionUpdateSender<'w, 's, T>
+impl<'w, T> PredictionUpdateCreator<'w, T>
 where
-    T: Send + Sync + 'static + Clone + Serialize,
+    T: Send + Sync + 'static + Clone,
 {
-    pub fn flush(&mut self) -> Result {
-        self.message_sender.flush()?;
-
-        Ok(())
-    }
-
-    pub fn finish_if_uncongested(&mut self) -> Result {
-        self.message_sender.finish_all_if_uncongested()?;
-
-        Ok(())
-    }
-
-    /// Creates a simulation world update for the next simulation step and does three things with it:
+    /// Creates a simulation [`WorldUpdate`], applies to the world and records it for client side prediction.
     ///
-    /// - Sends it to the server
-    /// - Queues it in the main app simulation
-    /// - Records it to be used in prediction
+    /// It is the caller's responsibility to inform the server that the client wishes to apply this update to the server.
+    /// To do this, the world update is returned and should be sent to the server.
+    /// The update can then be validated and reconciled on the server.
     ///
-    /// For `header` and `queue` see [LocalMessageSender::write].
-    pub fn write(&mut self, header: impl Into<u16>, queue: bool, update: T) -> Result {
-        let connection_entity = self.connection_q.single()?;
-
+    /// It should be noted that you do not need to use the world update returned by this function in your network message.
+    /// If the server can infer what the update is based on which client sent it,
+    /// then all that needs to be communicated is the timestamp of the returned update.
+    pub fn create(&mut self, update: T) -> WorldUpdate<T> {
         let update = WorldUpdate {
             time: self.time.elapsed(),
             update,
         };
 
-        self.message_sender.write(
-            header,
-            connection_entity,
-            *self.message_id,
-            queue,
-            &RequestWorldUpdate {
-                update: update.clone(),
-            },
-        )?;
-
         self.simulation_queue.insert(update.clone());
-        self.prediction_updates.push_back(update);
+        self.prediction_updates.push_back(update.clone());
 
-        Ok(())
+        update
     }
 }
