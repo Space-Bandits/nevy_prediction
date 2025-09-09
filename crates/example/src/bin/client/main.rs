@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use bevy::{
     color::palettes::css::*,
     log::{Level, LogPlugin},
@@ -29,6 +31,8 @@ fn main() {
     networking::build(&mut app);
 
     app.add_plugins(NevyPredictionClientPlugin::<PhysicsScheme>::default());
+
+    app.insert_resource(PredictionInterval(Duration::from_millis(300)));
 
     app.add_systems(PostStartup, debug_connect_to_server);
     app.add_systems(Startup, setup_camera);
