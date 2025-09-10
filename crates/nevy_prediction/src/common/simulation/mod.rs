@@ -47,6 +47,12 @@ pub struct SimulationUpdate;
 #[derive(ScheduleLabel, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ExtractSimulation;
 
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub enum ExtractSimulationSystems {
+    ExtractEntities,
+    ExtractComponents,
+}
+
 /// Holds the source world during the [`ExtractSimulation`] schedule.
 #[derive(Resource, Deref, DerefMut)]
 pub struct SourceWorld(pub World);
@@ -110,8 +116,18 @@ where
             (UpdateComponentSystems, DespawnSimulationEntities).chain(),
         );
 
-        app.init_resource::<Time>();
-        debug!("inserting simulation time");
+        app.configure_sets(
+            ExtractSimulation,
+            (
+                ExtractSimulationSystems::ExtractEntities,
+                ExtractSimulationSystems::ExtractComponents,
+            )
+                .chain(),
+        );
+
+        if app.world().get_resource::<Time>().is_none() {
+            app.init_resource::<Time>();
+        }
         app.init_resource::<Time<SimulationTime>>();
         app.init_resource::<SimulationTimeTarget>();
 

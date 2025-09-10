@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use bevy::{
     log::{Level, LogPlugin},
     prelude::*,
@@ -9,13 +7,14 @@ use example::{
     networking::StreamHeader,
     simulation::{ExampleBox, PhysicsScheme, RequestUpdateExampleBox, UpdateExampleBox},
 };
-use nevy::ReceivedMessages;
+use nevy::*;
 use nevy_prediction::server::prelude::*;
 
 use crate::{new_pairs::NewPairs, state::JoinedClient};
 
 pub mod networking;
 pub mod new_pairs;
+pub mod player;
 pub mod state;
 
 fn main() {
@@ -34,10 +33,11 @@ fn main() {
 
     example::build(&mut app);
 
+    app.add_plugins(NevyPredictionServerPlugin::<PhysicsScheme>::new(Update));
+
     networking::build(&mut app);
     state::build(&mut app);
-
-    app.add_plugins(NevyPredictionServerPlugin::<PhysicsScheme>::new(Update));
+    player::build(&mut app);
 
     app.add_observer(insert_prediction_clients);
 
@@ -47,7 +47,11 @@ fn main() {
     app.add_systems(
         Update,
         (
-            (initialize_boxes, refresh_boxes).chain(),
+            (
+                initialize_boxes,
+                // refresh_boxes
+            )
+                .chain(),
             accept_box_updates,
         )
             .in_set(ServerSimulationSystems::QueueUpdatesSystems),
@@ -86,7 +90,8 @@ fn spawn_boxes(mut commands: Commands, mut allocator: ResMut<SimulationEntityAll
 fn initialize_boxes(
     pairs: NewPairs<PredictionClient, ExampleBox>,
     box_q: Query<(&SimulationEntity, &ExampleBox)>,
-    mut updates: WorldUpdateSender<UpdateExampleBox>,
+    mut updates: WorldUpdateSender,
+    message_id: Res<MessageId<ServerWorldUpdate<UpdateExampleBox>>>,
 ) -> Result {
     for (client_entity, box_entity) in &pairs {
         let (&entity, example_box) = box_q.get(box_entity)?;
@@ -94,6 +99,7 @@ fn initialize_boxes(
         updates.write_now(
             StreamHeader::Messages,
             client_entity,
+            *message_id,
             true,
             UpdateExampleBox {
                 entity,
@@ -107,53 +113,62 @@ fn initialize_boxes(
     Ok(())
 }
 
-const RECONCILE_INTERVAL: Duration = Duration::from_millis(1000);
+// const RECONCILE_INTERVAL: Duration = Duration::from_millis(1000);
 
-/// Periodically generates updates that refresh the state of example boxes.
-///
-/// This is needed for non-deterministic simulations that would diverge without periodic updates.
-fn refresh_boxes(
-    mut last_update: Local<Duration>,
-    time: Res<Time>,
-    box_q: Query<(&SimulationEntity, &ExampleBox)>,
-    client_q: Query<Entity, With<PredictionClient>>,
-    mut updates: WorldUpdateSender<UpdateExampleBox>,
-) -> Result {
-    if time.elapsed() < *last_update + RECONCILE_INTERVAL {
-        return Ok(());
-    }
+// /// Periodically generates updates that refresh the state of example boxes.
+// ///
+// /// This is needed for non-deterministic simulations that would diverge without periodic updates.
+// fn refresh_boxes(
+//     mut last_update: Local<Duration>,
+//     time: Res<Time>,
+//     box_q: Query<(&SimulationEntity, &ExampleBox)>,
+//     client_q: Query<Entity, With<PredictionClient>>,
+//     mut updates: WorldUpdateSender,
+//     message_id: Res<MessageId<ServerWorldUpdate<UpdateExampleBox>>>,
+// ) -> Result {
+//     if time.elapsed() < *last_update + RECONCILE_INTERVAL {
+//         return Ok(());
+//     }
 
-    *last_update = time.elapsed();
+//     *last_update = time.elapsed();
 
-    for (&entity, example_box) in &box_q {
-        for client_entity in &client_q {
-            updates.write_now(
-                StreamHeader::Messages,
-                client_entity,
-                false, // not a critical message, so don't waste bandwidth if not needed
-                UpdateExampleBox {
-                    entity,
-                    example_box: example_box.clone(),
-                },
-            )?;
-        }
-    }
+//     for (&entity, example_box) in &box_q {
+//         for client_entity in &client_q {
+//             updates.write_now(
+//                 StreamHeader::Messages,
+//                 client_entity,
+//                 *message_id,
+//                 false, // not a critical message, so don't waste bandwidth if not needed
+//                 UpdateExampleBox {
+//                     entity,
+//                     example_box: example_box.clone(),
+//                 },
+//             )?;
+//         }
+//     }
 
-    Ok(())
-}
+//     Ok(())
+// }
 
 fn accept_box_updates(
     mut update_client_q: Query<(Entity, &mut ReceivedMessages<RequestUpdateExampleBox>)>,
     client_q: Query<Entity, With<PredictionClient>>,
     mut queue: ResMut<WorldUpdateQueue<UpdateExampleBox>>,
-    mut sender: WorldUpdateSender<UpdateExampleBox>,
+    mut sender: WorldUpdateSender,
+    message_id: Res<MessageId<ServerWorldUpdate<UpdateExampleBox>>>,
 ) -> Result {
     for (update_client_entity, mut messages) in &mut update_client_q {
         for RequestUpdateExampleBox { update } in messages.drain() {
             debug!("accepted an update from {}", update_client_entity);
 
             for client_entity in &client_q {
-                sender.write(StreamHeader::Messages, client_entity, true, update.clone())?;
+                sender.write(
+                    StreamHeader::Messages,
+                    client_entity,
+                    *message_id,
+                    true,
+                    update.clone(),
+                )?;
             }
 
             queue.insert(update);

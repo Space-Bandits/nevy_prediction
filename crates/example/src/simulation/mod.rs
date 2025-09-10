@@ -80,8 +80,6 @@ fn apply_update_boxes(
             *current_box = example_box;
         } else {
             commands.spawn((example_box, entity));
-
-            debug!("Spawned a new physics box");
         }
     }
 }

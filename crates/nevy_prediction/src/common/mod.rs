@@ -16,13 +16,14 @@ pub mod prelude {
     pub use crate::common::{
         scheme::{AddWorldUpdate, PredictionScheme},
         simulation::{
-            ExtractSimulation, ReadyUpdates, SimulationInstance, SimulationStartup, SimulationTime,
-            SimulationUpdate, SourceWorld, WorldUpdate, WorldUpdateQueue,
+            ExtractSimulation, ExtractSimulationSystems, ReadyUpdates, SimulationInstance,
+            SimulationStartup, SimulationTime, SimulationUpdate, SourceWorld, WorldUpdate,
+            WorldUpdateQueue,
             extract_component::ExtractSimulationComponentPlugin,
             extract_resource::ExtractSimulationResourcePlugin,
             simulation_entity::{
-                DespawnSimulationEntities, DespawnSimulatonEntity, ExtractSimulationEntitySystems,
-                SimulationEntity, SimulationEntityMap,
+                DespawnSimulationEntities, DespawnSimulatonEntity, SimulationEntity,
+                SimulationEntityMap,
             },
             update_component::{UpdateComponent, UpdateComponentPlugin, UpdateComponentSystems},
         },
@@ -73,8 +74,10 @@ pub(crate) struct UpdateServerTime {
     pub simulation_time: Duration,
 }
 
-/// Server -> Client message to apply an update to the simulation world at a certain time.
+/// Server -> Client message to apply a [`WorldUpdate`].
+///
+/// This type is in the public api only so that it's message id can be retrieved.
 #[derive(Serialize, Deserialize)]
-pub(crate) struct ServerWorldUpdate<T> {
-    pub update: WorldUpdate<T>,
+pub struct ServerWorldUpdate<T> {
+    pub(crate) update: WorldUpdate<T>,
 }

@@ -32,8 +32,9 @@ pub mod prelude {
         PredictionUpdateCreator, prediction::PredictionInterval,
     };
     pub use crate::common::simulation::{
-        StepSimulationSystems,
+        SimulationTime, StepSimulationSystems, WorldUpdate,
         simulation_entity::{SimulationEntity, SimulationEntityMap},
+        update_component::UpdateComponent,
     };
 }
 

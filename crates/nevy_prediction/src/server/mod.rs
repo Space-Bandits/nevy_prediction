@@ -18,9 +18,13 @@ use crate::common::{
 
 pub mod prelude {
     pub use crate::{
-        common::simulation::{
-            WorldUpdateQueue,
-            simulation_entity::{SimulationEntity, SimulationEntityMap},
+        common::{
+            ServerWorldUpdate,
+            simulation::{
+                WorldUpdate, WorldUpdateQueue,
+                simulation_entity::{SimulationEntity, SimulationEntityMap},
+                update_component::UpdateComponent,
+            },
         },
         server::{
             NevyPredictionServerPlugin, PredictionClient, ServerSimulationSystems,
@@ -169,35 +173,30 @@ where
 /// This could be the case for a large world, where you only send updates for the client's local area,
 /// or it could be the case for a competitive game where some clients should have information that others don't.
 #[derive(SystemParam)]
-pub struct WorldUpdateSender<'w, 's, T>
-where
-    T: Send + Sync + 'static,
-{
-    sender: SharedMessageSender<'w, 's, SimulationUpdatesStream>,
-    message_id: Res<'w, MessageId<ServerWorldUpdate<T>>>,
-    time: Res<'w, Time<SimulationTime>>,
+pub struct WorldUpdateSender<'w, 's> {
+    pub sender: SharedMessageSender<'w, 's, SimulationUpdatesStream>,
+    pub time: Res<'w, Time<SimulationTime>>,
 }
 
-impl<'w, 's, T> WorldUpdateSender<'w, 's, T>
-where
-    T: Send + Sync + 'static,
-{
+impl<'w, 's> WorldUpdateSender<'w, 's> {
     /// Sends a [`nevy`] message containing a [`WorldUpdate`] with the current simulation time.
     ///
     /// See [`SharedMessageSender::write`].
-    pub fn write_now(
+    pub fn write_now<T>(
         &mut self,
         header: impl Into<u16>,
         client_entity: Entity,
+        message_id: MessageId<ServerWorldUpdate<T>>,
         queue: bool,
         update: T,
     ) -> Result<bool>
     where
-        T: Serialize,
+        T: Serialize + Send + Sync + 'static,
     {
         self.write(
             header,
             client_entity,
+            message_id,
             queue,
             WorldUpdate {
                 time: self.time.elapsed(),
@@ -211,20 +210,21 @@ where
     /// If you want to send an update with the current simulation time, use [`Self::write_now`].
     ///
     /// See [`SharedMessageSender::write`].
-    pub fn write(
+    pub fn write<T>(
         &mut self,
         header: impl Into<u16>,
         client_entity: Entity,
+        message_id: MessageId<ServerWorldUpdate<T>>,
         queue: bool,
         update: WorldUpdate<T>,
     ) -> Result<bool>
     where
-        T: Serialize,
+        T: Serialize + Send + Sync + 'static,
     {
         self.sender.write(
             header,
             client_entity,
-            *self.message_id,
+            message_id,
             queue,
             &ServerWorldUpdate { update },
         )

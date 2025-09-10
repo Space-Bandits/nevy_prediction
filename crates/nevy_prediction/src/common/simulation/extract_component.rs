@@ -3,8 +3,8 @@ use std::marker::PhantomData;
 use bevy::{ecs::component::Mutable, prelude::*};
 
 use crate::common::simulation::{
-    ExtractSimulation, SourceWorld,
-    simulation_entity::{ExtractSimulationEntitySystems, SimulationEntity, SimulationEntityMap},
+    ExtractSimulation, ExtractSimulationSystems, SourceWorld,
+    simulation_entity::{SimulationEntity, SimulationEntityMap},
 };
 
 /// This plugin is a utility to automatically extract components on [`SimulationEntity`]s.
@@ -25,7 +25,7 @@ where
     fn build(&self, app: &mut App) {
         app.add_systems(
             ExtractSimulation,
-            extract_component::<C>.after(ExtractSimulationEntitySystems),
+            extract_component::<C>.in_set(ExtractSimulationSystems::ExtractComponents),
         );
     }
 }
@@ -43,12 +43,17 @@ where
     let new_component_q = source_component_q.get_or_insert_with(|| source_world.query_filtered());
 
     for (&simulation_entity, source_component) in new_component_q.iter(&mut *source_world) {
-        let entity = map.get(simulation_entity).ok_or("Simulation entity should exist because this system runs after `ExtractSimulationEntities`")?;
+        let local_entity = map.get(simulation_entity).ok_or(format!(
+            "{:?} should exist because this system runs after `ExtractSimulationEntities`",
+            simulation_entity
+        ))?;
 
-        if let Ok(mut local_component) = local_component_q.get_mut(entity) {
+        if let Ok(mut local_component) = local_component_q.get_mut(local_entity) {
             *local_component = source_component.clone();
         } else {
-            commands.entity(entity).insert(source_component.clone());
+            commands
+                .entity(local_entity)
+                .insert(source_component.clone());
         }
     }
 

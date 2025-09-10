@@ -15,6 +15,7 @@ use nevy_prediction::client::prelude::*;
 use crate::networking::ClientConnection;
 
 pub mod networking;
+pub mod player;
 
 fn main() {
     let mut app = App::new();
@@ -27,11 +28,13 @@ fn main() {
     }));
 
     example::build(&mut app);
-    networking::build(&mut app);
 
     app.add_plugins(NevyPredictionClientPlugin::<PhysicsScheme>::default());
 
-    app.insert_resource(PredictionInterval(Duration::from_millis(300)));
+    networking::build(&mut app);
+    player::build(&mut app);
+
+    app.insert_resource(PredictionInterval(Duration::from_millis(1000)));
 
     app.add_systems(PostStartup, debug_connect_to_server);
     app.add_systems(Startup, setup_camera);

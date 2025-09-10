@@ -5,7 +5,7 @@ use serde::Serialize;
 
 use crate::networking::ClientConnection;
 
-/// Utility parameter for
+/// Utility parameter for receiving messages on the client connection.
 #[derive(SystemParam)]
 pub struct ClientMessages<'w, 's, T>
 where

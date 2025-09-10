@@ -3,12 +3,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::common::{
     scheme::AddWorldUpdate,
-    simulation::{ExtractSimulation, ReadyUpdates, ResetSimulation, SimulationUpdate, SourceWorld},
+    simulation::{
+        ExtractSimulation, ExtractSimulationSystems, ReadyUpdates, ResetSimulation,
+        SimulationUpdate, SourceWorld,
+    },
 };
-
-/// System set where [`SimulationEntity`]s are extracted in [`ExtractSimulation`].
-#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ExtractSimulationEntitySystems;
 
 /// System set where [`SimulationEntity`]s are despawned by [`DespawnSimulatonEntity`] updates during [`SimulationUpdate`].
 #[derive(SystemSet, Clone, Debug, PartialEq, Eq, Hash)]
@@ -28,7 +27,7 @@ pub fn build(app: &mut App) {
             despawn_removed_simulation_entities,
         )
             .chain()
-            .in_set(ExtractSimulationEntitySystems),
+            .in_set(ExtractSimulationSystems::ExtractEntities),
     );
 
     app.add_systems(ResetSimulation, reset_simulation_entities);
@@ -81,7 +80,12 @@ fn add_simulation_entity(
     let local_entity = trigger.target();
     let &simulation_entity = entity_q.get(local_entity)?;
 
-    map.map.insert(simulation_entity, local_entity);
+    if let Some(previous_entity) = map.map.insert(simulation_entity, local_entity) {
+        error!(
+            "Simulation entity {:?} was inserted on {}, but already existed on {}.",
+            simulation_entity, local_entity, previous_entity
+        );
+    }
 
     Ok(())
 }
