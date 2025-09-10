@@ -1,11 +1,18 @@
 use bevy::{platform::collections::HashMap, prelude::*};
 use serde::{Deserialize, Serialize};
 
-use crate::common::simulation::{ExtractSimulation, ResetSimulation, SourceWorld};
+use crate::common::{
+    scheme::AddWorldUpdate,
+    simulation::{ExtractSimulation, ReadyUpdates, ResetSimulation, SimulationUpdate, SourceWorld},
+};
 
 /// System set where [`SimulationEntity`]s are extracted in [`ExtractSimulation`].
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ExtractSimulationEntitySystems;
+
+/// System set where [`SimulationEntity`]s are despawned by [`DespawnSimulatonEntity`] updates during [`SimulationUpdate`].
+#[derive(SystemSet, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct DespawnSimulationEntities;
 
 pub fn build(app: &mut App) {
     app.init_resource::<SimulationEntityMap>();
@@ -25,6 +32,13 @@ pub fn build(app: &mut App) {
     );
 
     app.add_systems(ResetSimulation, reset_simulation_entities);
+
+    app.add_systems(
+        SimulationUpdate,
+        despawn_simulation_entities.in_set(DespawnSimulationEntities),
+    );
+
+    app.add_world_update::<DespawnSimulatonEntity>();
 }
 
 /// This component is a unique id that can be used to map entities across instances of the simulation.
@@ -143,4 +157,29 @@ fn reset_simulation_entities(
     for entity in &entity_q {
         commands.entity(entity).despawn();
     }
+}
+
+/// A world update that despawns a simulation entity.
+///
+/// This world update is added by default.
+#[derive(Serialize, Deserialize, Clone)]
+pub struct DespawnSimulatonEntity {
+    pub entity: SimulationEntity,
+}
+
+fn despawn_simulation_entities(
+    mut commands: Commands,
+    mut updates: ReadyUpdates<DespawnSimulatonEntity>,
+    map: Res<SimulationEntityMap>,
+) -> Result {
+    for DespawnSimulatonEntity { entity } in updates.drain() {
+        let local_entity = map.get(entity).ok_or(format!(
+            "Simulation entity {:?} did not exist locally when trying to despawn it.",
+            entity
+        ))?;
+
+        commands.entity(local_entity).despawn();
+    }
+
+    Ok(())
 }

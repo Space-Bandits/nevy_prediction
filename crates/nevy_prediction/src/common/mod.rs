@@ -21,8 +21,10 @@ pub mod prelude {
             extract_component::ExtractSimulationComponentPlugin,
             extract_resource::ExtractSimulationResourcePlugin,
             simulation_entity::{
-                ExtractSimulationEntitySystems, SimulationEntity, SimulationEntityMap,
+                DespawnSimulationEntities, DespawnSimulatonEntity, ExtractSimulationEntitySystems,
+                SimulationEntity, SimulationEntityMap,
             },
+            update_component::{UpdateComponent, UpdateComponentPlugin, UpdateComponentSystems},
         },
     };
 }

@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::networking::StreamHeader;
 
-// pub mod player;
+pub mod player;
 
 pub struct PhysicsScheme;
 
@@ -41,7 +41,7 @@ pub struct SimulationPlugin;
 
 impl Plugin for SimulationPlugin {
     fn build(&self, app: &mut App) {
-        // player::build(app);
+        player::build(app);
 
         app.add_world_update::<UpdateExampleBox>();
 

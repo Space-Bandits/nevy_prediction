@@ -16,11 +16,17 @@ use bevy::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::common::scheme::PredictionScheme;
+use crate::common::{
+    scheme::PredictionScheme,
+    simulation::{
+        simulation_entity::DespawnSimulationEntities, update_component::UpdateComponentSystems,
+    },
+};
 
 pub mod extract_component;
 pub mod extract_resource;
 pub mod simulation_entity;
+pub mod update_component;
 
 /// This is the first schedule to run on all simulation instances and only ever runs once.
 #[derive(ScheduleLabel, Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -98,6 +104,11 @@ where
         app.add_schedule(Schedule::new(ResetSimulation));
 
         simulation_entity::build(app);
+
+        app.configure_sets(
+            SimulationUpdate,
+            (UpdateComponentSystems, DespawnSimulationEntities).chain(),
+        );
 
         app.init_resource::<Time>();
         debug!("inserting simulation time");
