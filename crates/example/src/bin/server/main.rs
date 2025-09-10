@@ -7,8 +7,7 @@ use bevy::{
 };
 use example::{
     networking::StreamHeader,
-    scheme::{PhysicsScheme, RequestUpdateExampleBox, UpdateExampleBox},
-    simulation::ExampleBox,
+    simulation::{ExampleBox, PhysicsScheme, RequestUpdateExampleBox, UpdateExampleBox},
 };
 use nevy::ReceivedMessages;
 use nevy_prediction::server::prelude::*;

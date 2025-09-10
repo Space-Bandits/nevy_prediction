@@ -3,14 +3,13 @@ use nevy::AddMessage;
 use serde::{Deserialize, Serialize};
 
 pub mod networking;
-pub mod scheme;
 pub mod simulation;
 
 /// common logic for the server and client apps
 pub fn build(app: &mut App) {
     networking::build(app);
 
-    app.add_message::<scheme::RequestUpdateExampleBox>();
+    app.add_message::<simulation::RequestUpdateExampleBox>();
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]

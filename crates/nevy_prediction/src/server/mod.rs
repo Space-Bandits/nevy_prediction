@@ -94,18 +94,7 @@ where
         );
 
         app.add_systems(SimulationUpdate, send_simulation_time_updates::<S>);
-
-        for update in S::updates().0 {
-            update.build_server(app, self.schedule);
-        }
     }
-}
-
-pub fn build_update<T>(app: &mut App, schedule: Interned<dyn ScheduleLabel>)
-where
-    T: Send + Sync + 'static,
-{
-    let _ = (app, schedule);
 }
 
 /// Marker type for the simulation updates stream [SharedMessageSender].

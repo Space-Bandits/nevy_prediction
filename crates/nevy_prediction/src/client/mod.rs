@@ -58,6 +58,10 @@ pub enum ClientSimulationSystems {
     RunParallelAppsSystems,
 }
 
+/// Used to add systems when building a world update
+#[derive(Resource, Deref)]
+pub(crate) struct ClientPredictionSchedule(pub Interned<dyn ScheduleLabel>);
+
 pub struct NevyPredictionClientPlugin<S> {
     pub(crate) _p: PhantomData<S>,
     pub(crate) schedule: Interned<dyn ScheduleLabel>,
@@ -77,6 +81,8 @@ where
     S: PredictionScheme,
 {
     fn build(&self, app: &mut App) {
+        app.insert_resource(ClientPredictionSchedule(self.schedule));
+
         app.configure_sets(
             self.schedule,
             (
@@ -113,17 +119,19 @@ where
             ),
         );
 
-        for update in S::updates().0 {
-            update.build_client(app, self.schedule);
-        }
+        // for update in S::updates().0 {
+        //     update.build_client(app);
+        // }
     }
 }
 
 /// Is called on the client app for each world update message added by the prediction scheme
-pub(crate) fn build_update<T>(app: &mut App, schedule: Interned<dyn ScheduleLabel>)
+pub(crate) fn build_update<T>(app: &mut App)
 where
     T: Send + Sync + 'static + Clone,
 {
+    let schedule = **app.world().resource::<ClientPredictionSchedule>();
+
     server_world::build_update::<T>(app, schedule);
     prediction::build_update::<T>(app, schedule);
 }

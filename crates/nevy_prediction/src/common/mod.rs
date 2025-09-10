@@ -14,7 +14,7 @@ pub mod simulation;
 
 pub mod prelude {
     pub use crate::common::{
-        scheme::{PredictionScheme, SchemeWorldUpdates},
+        scheme::{AddWorldUpdate, PredictionScheme},
         simulation::{
             ExtractSimulation, ReadyUpdates, SimulationInstance, SimulationStartup, SimulationTime,
             SimulationUpdate, SourceWorld, WorldUpdate, WorldUpdateQueue,
@@ -37,9 +37,9 @@ where
 
     app.add_systems(Startup, startup_simulation);
 
-    for update in S::updates().0 {
-        update.build_common(app);
-    }
+    // for update in S::updates().0 {
+    //     update.build_common(app);
+    // }
 }
 
 /// Build function run for the client and server app per world update

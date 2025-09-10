@@ -111,9 +111,9 @@ where
 
         app.add_plugins(S::plugin());
 
-        for update in S::updates().0 {
-            update.build_simulation(app);
-        }
+        // for update in S::updates().0 {
+        //     update.build_simulation(app);
+        // }
     }
 }
 
