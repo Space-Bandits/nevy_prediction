@@ -10,7 +10,9 @@ pub fn build(app: &mut App) {
         Update,
         (
             set_local_player,
-            render_players.after(StepSimulationSystems),
+            (extrapolate_players, render_players)
+                .chain()
+                .after(StepSimulationSystems),
             update_player_input,
         ),
     );
@@ -27,10 +29,17 @@ fn set_local_player(mut commands: Commands, mut messages: ClientMessages<SetLoca
     }
 }
 
-fn render_players(mut gizmos: Gizmos, player_q: Query<&PlayerState>) {
-    for player_state in &player_q {
+fn extrapolate_players(mut player_q: Query<(&mut Transform, &PlayerState)>, time: Res<Time>) {
+    for (mut transform, state) in &mut player_q {
+        transform.translation +=
+            Vec3::new(state.velocity.x, 0., state.velocity.y) * time.delta_secs();
+    }
+}
+
+fn render_players(mut gizmos: Gizmos, player_q: Query<&GlobalTransform>) {
+    for transform in &player_q {
         gizmos.cuboid(
-            Transform::from_xyz(player_state.position.x, 0., player_state.position.y),
+            *transform,
             WHITE,
         );
     }

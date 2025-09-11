@@ -102,14 +102,20 @@ fn init_players(
 }
 
 fn accept_move_players(
-    mut requesting_client_q: Query<(&ClientPlayer, &mut ReceivedMessages<RequestMovePlayer>)>,
+    mut requesting_client_q: Query<(
+        Entity,
+        &ClientPlayer,
+        &mut ReceivedMessages<RequestMovePlayer>,
+    )>,
     player_q: Query<&SimulationEntity>,
     client_q: Query<Entity, With<PredictionClient>>,
-    mut queue: ResMut<WorldUpdateQueue<UpdateComponent<PlayerInput>>>,
+    mut queue: ResMut<UpdateExecutionQueue<UpdateComponent<PlayerInput>>>,
     mut sender: WorldUpdateSender,
     message_id: Res<MessageId<ServerWorldUpdate<UpdateComponent<PlayerInput>>>>,
 ) -> Result {
-    for (&ClientPlayer { player_entity }, mut messages) in &mut requesting_client_q {
+    for (requesting_client_entity, &ClientPlayer { player_entity }, mut messages) in
+        &mut requesting_client_q
+    {
         for RequestMovePlayer { time, input } in messages.drain() {
             let &player_simulation_entity = player_q.get(player_entity)?;
 
@@ -127,6 +133,7 @@ fn accept_move_players(
                     client_entity,
                     *message_id,
                     true,
+                    client_entity != requesting_client_entity,
                     update.clone(),
                 )?;
             }

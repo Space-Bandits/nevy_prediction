@@ -19,7 +19,7 @@ use crate::{
             SimulationTimeTarget, StepSimulationSystems, WorldUpdate,
         },
     },
-    server::prelude::WorldUpdateQueue,
+    server::prelude::UpdateExecutionQueue,
 };
 
 pub(crate) mod parallel_app;
@@ -201,7 +201,7 @@ where
     T: Send + Sync + 'static,
 {
     time: Res<'w, Time<SimulationTime>>,
-    simulation_queue: ResMut<'w, WorldUpdateQueue<T>>,
+    simulation_queue: ResMut<'w, UpdateExecutionQueue<T>>,
     prediction_updates: ResMut<'w, PredictionUpdates<T>>,
 }
 

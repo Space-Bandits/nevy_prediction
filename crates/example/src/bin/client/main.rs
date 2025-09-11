@@ -29,7 +29,7 @@ fn main() {
     networking::build(&mut app);
     player::build(&mut app);
 
-    app.insert_resource(PredictionInterval(Duration::from_millis(300)));
+    app.insert_resource(PredictionInterval(Duration::from_millis(1000)));
 
     app.add_systems(PostStartup, debug_connect_to_server);
     app.add_systems(Startup, setup_camera);

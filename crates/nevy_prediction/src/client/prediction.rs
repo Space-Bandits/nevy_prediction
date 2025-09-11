@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, marker::PhantomData, time::Duration};
+use std::{marker::PhantomData, time::Duration};
 
 use bevy::{
     ecs::{intern::Interned, schedule::ScheduleLabel},
@@ -12,7 +12,7 @@ use crate::{
         scheme::PredictionScheme,
         simulation::{
             SimulationInstance, SimulationPlugin, SimulationStartup, SimulationTime,
-            SimulationTimeTarget, WorldUpdate, WorldUpdateQueue,
+            SimulationTimeTarget, UpdateExecutionQueue, WorldUpdateQueue,
         },
     },
 };
@@ -218,14 +218,15 @@ fn run_prediction_app(mut prediction_app: NonSendMut<PredictionWorld>) {
 ///
 /// These updates get added to the update queue of the prediction app before it is run.
 #[derive(Resource, Deref, DerefMut)]
-pub(crate) struct PredictionUpdates<T>(pub VecDeque<WorldUpdate<T>>);
+pub(crate) struct PredictionUpdates<T>(WorldUpdateQueue<T>);
 
 impl<T> Default for PredictionUpdates<T> {
     fn default() -> Self {
-        PredictionUpdates(VecDeque::new())
+        PredictionUpdates(WorldUpdateQueue::default())
     }
 }
 
+/// Removes prediction updates that have been reconciled
 fn drain_prediction_updates<T>(
     mut updates: ResMut<PredictionUpdates<T>>,
     mut prediction_world: NonSendMut<PredictionWorld>,
@@ -263,7 +264,7 @@ fn queue_prediction_updates<T>(
         return;
     };
 
-    let mut queue = world.resource_mut::<WorldUpdateQueue<T>>();
+    let mut queue = world.resource_mut::<UpdateExecutionQueue<T>>();
 
     for update in prediction_updates.iter().cloned() {
         queue.insert(update);
@@ -276,7 +277,7 @@ fn reapply_new_world_updates<T>(
     mut prediction_world: NonSendMut<PredictionWorld>,
     predicted_time: Res<Time<SimulationTime>>,
     prediction_updates: Res<PredictionUpdates<T>>,
-    mut prediction_queue: ResMut<WorldUpdateQueue<T>>,
+    mut prediction_queue: ResMut<UpdateExecutionQueue<T>>,
 ) where
     T: Send + Sync + 'static + Clone,
 {

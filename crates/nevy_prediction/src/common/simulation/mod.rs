@@ -148,7 +148,7 @@ pub(crate) fn build_update<T>(app: &mut App)
 where
     T: Send + Sync + 'static,
 {
-    app.init_resource::<WorldUpdateQueue<T>>();
+    app.init_resource::<UpdateExecutionQueue<T>>();
 }
 
 /// Advances [SimulationTime] and the [SimulationUpdate].
@@ -188,28 +188,47 @@ pub struct WorldUpdate<T> {
     pub update: T,
 }
 
-/// This contains [`WorldUpdate`]s that will be applied when their simulation timetamp is reached.
-///
-/// You insert world updates into this queue to apply them to the simulation.
-#[derive(Resource)]
-pub struct WorldUpdateQueue<T> {
-    updates: VecDeque<WorldUpdate<T>>,
-}
+/// An ordered queue of [`WorldUpdate`]s
+#[derive(Deref, DerefMut)]
+pub struct WorldUpdateQueue<T>(VecDeque<WorldUpdate<T>>);
 
 impl<T> Default for WorldUpdateQueue<T> {
     fn default() -> Self {
-        Self {
-            updates: VecDeque::new(),
-        }
+        WorldUpdateQueue(VecDeque::new())
     }
 }
 
 impl<T> WorldUpdateQueue<T> {
-    /// Inserts an update into the queue, which will be applied when its simulation timestamp is reached.
+    /// Inserts a world update into the queue maintaining order.
+    ///
+    /// If there are updates with the same timestamp this update will be inserted *after* the existing ones.
     pub fn insert(&mut self, update: WorldUpdate<T>) {
-        let index = self.updates.partition_point(|e| e.time <= update.time);
+        let index = self.0.partition_point(|e| e.time <= update.time);
 
-        self.updates.insert(index, update);
+        self.0.insert(index, update);
+    }
+
+    /// Returns the next world update in the queue that is timestamped at or before the given time.
+    pub fn next(&mut self, time: Duration) -> Option<WorldUpdate<T>> {
+        let front = self.0.front()?;
+
+        if front.time > time {
+            return None;
+        }
+
+        self.0.pop_front()
+    }
+}
+
+/// This contains [`WorldUpdate`]s that will be applied when their simulation timetamp is reached.
+///
+/// You insert world updates into this queue to apply them to the simulation.
+#[derive(Resource, Deref, DerefMut)]
+pub struct UpdateExecutionQueue<T>(WorldUpdateQueue<T>);
+
+impl<T> Default for UpdateExecutionQueue<T> {
+    fn default() -> Self {
+        UpdateExecutionQueue(WorldUpdateQueue::default())
     }
 }
 
@@ -221,7 +240,7 @@ pub struct ReadyUpdates<'w, T>
 where
     T: Send + Sync + 'static,
 {
-    updates: ResMut<'w, WorldUpdateQueue<T>>,
+    updates: ResMut<'w, UpdateExecutionQueue<T>>,
     time: ResMut<'w, Time<SimulationTime>>,
 }
 
@@ -232,21 +251,19 @@ where
     /// Returns an iterator over the updates that should be applied this simulation step.
     pub fn drain(&mut self) -> impl Iterator<Item = T> + '_ {
         std::iter::from_fn(move || {
-            let front = self.updates.updates.front()?;
-
-            if front.time > self.time.elapsed() {
+            let Some(update) = self.updates.next(self.time.elapsed()) else {
                 return None;
-            }
+            };
 
-            if front.time != self.time.elapsed() {
+            if update.time != self.time.elapsed() {
                 warn!(
                     "Returned an update for {} late at {}",
-                    front.time.as_millis(),
+                    update.time.as_millis(),
                     self.time.elapsed().as_millis()
                 )
             }
 
-            self.updates.updates.pop_front().map(|update| update.update)
+            Some(update.update)
         })
     }
 }

@@ -13,15 +13,16 @@ use nevy::*;
 
 use crate::{
     client::{
-        ClientSimulationSystems, PredictionServerConnection, parallel_app::ParallelWorld,
-        prediction::PredictionInterval,
+        ClientSimulationSystems, PredictionServerConnection,
+        parallel_app::ParallelWorld,
+        prediction::{PredictionInterval, PredictionUpdates},
     },
     common::{
         ServerWorldUpdate, UpdateServerTime,
         scheme::PredictionScheme,
         simulation::{
             SimulationInstance, SimulationPlugin, SimulationStartup, SimulationTime,
-            SimulationTimeTarget, WorldUpdateQueue,
+            SimulationTimeTarget, UpdateExecutionQueue,
         },
     },
 };
@@ -45,7 +46,7 @@ where
 
 pub(crate) fn build_update<T>(app: &mut App, schedule: Interned<dyn ScheduleLabel>)
 where
-    T: Send + Sync + 'static,
+    T: Send + Sync + 'static + Clone,
 {
     app.add_systems(schedule, receive_world_updates::<T>);
 }
@@ -87,15 +88,20 @@ fn receive_world_updates<T>(
         &mut ReceivedMessages<ServerWorldUpdate<T>>,
         Has<PredictionServerConnection>,
     )>,
+    mut prediction_updates: ResMut<PredictionUpdates<T>>,
 ) where
-    T: Send + Sync + 'static,
+    T: Send + Sync + 'static + Clone,
 {
     let Some(world) = server_world.get() else {
         return;
     };
 
     for (connection_entity, mut messages, is_server) in &mut message_q {
-        for ServerWorldUpdate { update } in messages.drain() {
+        for ServerWorldUpdate {
+            update,
+            include_in_prediction,
+        } in messages.drain()
+        {
             if !is_server {
                 warn!(
                     "Received a prediction message from a connection that isn't the server: {}",
@@ -105,7 +111,13 @@ fn receive_world_updates<T>(
                 continue;
             }
 
-            world.resource_mut::<WorldUpdateQueue<T>>().insert(update);
+            if include_in_prediction {
+                prediction_updates.insert(update.clone());
+            }
+
+            world
+                .resource_mut::<UpdateExecutionQueue<T>>()
+                .insert(update);
         }
     }
 }

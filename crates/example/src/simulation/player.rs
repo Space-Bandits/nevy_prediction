@@ -23,7 +23,7 @@ pub fn build(app: &mut App) {
 }
 
 #[derive(Component, Default, Clone)]
-#[require(PlayerInput, PlayerState)]
+#[require(PlayerInput, PlayerState, Transform)]
 pub struct Player;
 
 #[derive(Component, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -85,11 +85,16 @@ impl PlayerInput {
 
 const PLAYER_SPEED: f32 = 5.0;
 
-fn move_players(mut player_q: Query<(&mut PlayerState, &PlayerInput)>, time: Res<Time>) {
-    for (mut state, input) in player_q.iter_mut() {
+fn move_players(
+    mut player_q: Query<(&mut Transform, &mut PlayerState, &PlayerInput)>,
+    time: Res<Time>,
+) {
+    for (mut transform, mut state, input) in player_q.iter_mut() {
         state.velocity = input.movement_vector() * PLAYER_SPEED;
 
         let position_delta = state.velocity * time.delta_secs();
         state.position += position_delta;
+
+        transform.translation = Vec3::new(state.position.x, 0., state.position.y);
     }
 }

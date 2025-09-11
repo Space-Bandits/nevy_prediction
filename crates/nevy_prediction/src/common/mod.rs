@@ -17,8 +17,8 @@ pub mod prelude {
         scheme::{AddWorldUpdate, PredictionScheme},
         simulation::{
             ExtractSimulation, ExtractSimulationSystems, ReadyUpdates, SimulationInstance,
-            SimulationStartup, SimulationTime, SimulationUpdate, SourceWorld, WorldUpdate,
-            WorldUpdateQueue,
+            SimulationStartup, SimulationTime, SimulationUpdate, SourceWorld, UpdateExecutionQueue,
+            WorldUpdate,
             extract_component::ExtractSimulationComponentPlugin,
             extract_resource::ExtractSimulationResourcePlugin,
             simulation_entity::{
@@ -80,4 +80,5 @@ pub(crate) struct UpdateServerTime {
 #[derive(Serialize, Deserialize)]
 pub struct ServerWorldUpdate<T> {
     pub(crate) update: WorldUpdate<T>,
+    pub(crate) include_in_prediction: bool,
 }
