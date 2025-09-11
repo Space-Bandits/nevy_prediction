@@ -1,15 +1,10 @@
 use std::time::Duration;
 
 use bevy::{
-    color::palettes::css::*,
     log::{Level, LogPlugin},
     prelude::*,
 };
-use example::{
-    networking::StreamHeader,
-    simulation::{ExampleBox, PhysicsScheme, RequestUpdateExampleBox, UpdateExampleBox},
-};
-use nevy::*;
+use example::simulation::PhysicsScheme;
 use nevy_prediction::client::prelude::*;
 
 use crate::networking::ClientConnection;
@@ -34,17 +29,10 @@ fn main() {
     networking::build(&mut app);
     player::build(&mut app);
 
-    app.insert_resource(PredictionInterval(Duration::from_millis(1000)));
+    app.insert_resource(PredictionInterval(Duration::from_millis(300)));
 
     app.add_systems(PostStartup, debug_connect_to_server);
     app.add_systems(Startup, setup_camera);
-    app.add_systems(
-        Update,
-        (
-            render_example_boxes.after(StepSimulationSystems),
-            simulation_input.in_set(ClientSimulationSystems::QueueUpdatesSystems),
-        ),
-    );
 
     app.run();
 }
@@ -78,60 +66,6 @@ fn debug_connect_to_server(
 fn setup_camera(mut commands: Commands) {
     commands.spawn((
         Camera3d::default(),
-        Transform::from_xyz(-1., 5., 1.).looking_at(Vec3::ZERO, Vec3::Y),
+        Transform::from_xyz(0., 15., 5.).looking_at(Vec3::ZERO, Vec3::Y),
     ));
-}
-
-fn simulation_input(
-    input: Res<ButtonInput<KeyCode>>,
-    box_q: Query<(&SimulationEntity, &ExampleBox), With<ExampleBox>>,
-    mut updates: PredictionUpdateCreator<UpdateExampleBox>,
-    mut sender: LocalMessageSender,
-    message_id: Res<MessageId<RequestUpdateExampleBox>>,
-    server_q: Query<Entity, With<ClientConnection>>,
-) -> Result {
-    let server_entity = server_q.single()?;
-
-    if !input.just_pressed(KeyCode::Space) {
-        return Ok(());
-    }
-
-    for (&entity, example_box) in &box_q {
-        let update = updates.create(UpdateExampleBox {
-            entity,
-            example_box: ExampleBox {
-                position: example_box.position,
-                velocity: example_box.velocity * -1.,
-            },
-        });
-
-        sender.write(
-            StreamHeader::Messages,
-            server_entity,
-            *message_id,
-            false, // Don't send if congested
-            &RequestUpdateExampleBox { update },
-        )?;
-
-        debug!("Sent input for {:?}", entity);
-    }
-
-    Ok(())
-}
-
-fn render_example_boxes(mut gizmos: Gizmos, box_q: Query<&ExampleBox>) {
-    gizmos.circle(
-        Quat::from_rotation_x(std::f32::consts::FRAC_PI_2),
-        1.,
-        ORANGE,
-    );
-
-    for example_box in &box_q {
-        gizmos.cuboid(
-            Transform::from_translation(
-                Quat::from_rotation_y(example_box.position).mul_vec3(Vec3::NEG_Z),
-            ),
-            WHITE,
-        );
-    }
 }

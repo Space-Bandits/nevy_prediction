@@ -49,8 +49,8 @@ fn update_player_input(
     let player_input = PlayerInput {
         forward: keyboard_input.pressed(KeyCode::KeyW),
         backward: keyboard_input.pressed(KeyCode::KeyS),
-        right: keyboard_input.pressed(KeyCode::KeyD),
         left: keyboard_input.pressed(KeyCode::KeyA),
+        right: keyboard_input.pressed(KeyCode::KeyD),
     };
 
     if *last_input == player_input {
@@ -70,7 +70,7 @@ fn update_player_input(
         component: player_input.clone(),
     });
 
-    debug!("Created an update");
+    debug!("Moving: {}", player_input.movement_vector());
 
     messages.write(
         *message_id,

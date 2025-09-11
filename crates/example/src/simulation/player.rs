@@ -30,8 +30,8 @@ pub struct Player;
 pub struct PlayerInput {
     pub forward: bool,
     pub backward: bool,
-    pub right: bool,
     pub left: bool,
+    pub right: bool,
 }
 
 #[derive(Component, Default, Clone, Serialize, Deserialize)]
@@ -65,25 +65,29 @@ fn spawn_players(mut commands: Commands, mut updates: ReadyUpdates<SpawnPlayer>)
     }
 }
 
-const PLAYER_SPEED: f32 = 5.0;
-
-fn move_players(mut player_q: Query<(&mut PlayerState, &PlayerInput)>, time: Res<Time>) {
-    for (mut state, input) in player_q.iter_mut() {
-        let input_vector = Vec2::new(
-            match (input.forward, input.backward) {
+impl PlayerInput {
+    pub fn movement_vector(&self) -> Vec2 {
+        Vec2::new(
+            match (self.right, self.left) {
                 (true, false) => 1.0,
                 (false, true) => -1.0,
                 _ => 0.0,
             },
-            match (input.right, input.left) {
+            match (self.backward, self.forward) {
                 (true, false) => 1.0,
                 (false, true) => -1.0,
                 _ => 0.0,
             },
         )
-        .normalize_or_zero();
+        .normalize_or_zero()
+    }
+}
 
-        state.velocity = input_vector * PLAYER_SPEED;
+const PLAYER_SPEED: f32 = 5.0;
+
+fn move_players(mut player_q: Query<(&mut PlayerState, &PlayerInput)>, time: Res<Time>) {
+    for (mut state, input) in player_q.iter_mut() {
+        state.velocity = input.movement_vector() * PLAYER_SPEED;
 
         let position_delta = state.velocity * time.delta_secs();
         state.position += position_delta;

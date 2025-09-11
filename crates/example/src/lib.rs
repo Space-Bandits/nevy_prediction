@@ -9,8 +9,6 @@ pub mod simulation;
 pub fn build(app: &mut App) {
     networking::build(app);
 
-    app.add_message::<simulation::RequestUpdateExampleBox>();
-
     app.add_message::<simulation::player::SetLocalPlayer>();
     app.add_message::<simulation::player::RequestMovePlayer>();
 }

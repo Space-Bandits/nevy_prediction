@@ -207,7 +207,7 @@ impl<T> Default for WorldUpdateQueue<T> {
 impl<T> WorldUpdateQueue<T> {
     /// Inserts an update into the queue, which will be applied when its simulation timestamp is reached.
     pub fn insert(&mut self, update: WorldUpdate<T>) {
-        let (Ok(index) | Err(index)) = self.updates.binary_search_by(|e| e.time.cmp(&update.time));
+        let index = self.updates.partition_point(|e| e.time <= update.time);
 
         self.updates.insert(index, update);
     }
