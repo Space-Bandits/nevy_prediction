@@ -21,7 +21,7 @@ pub mod prelude {
         common::{
             ServerWorldUpdate,
             simulation::{
-                UpdateExecutionQueue, WorldUpdate,
+                SimulationTimeTarget, UpdateExecutionQueue, WorldUpdate,
                 simulation_entity::{SimulationEntity, SimulationEntityMap},
                 update_component::UpdateComponent,
             },
