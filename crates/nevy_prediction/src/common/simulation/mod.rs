@@ -74,8 +74,11 @@ pub struct StepSimulationSystems;
 /// This resource is used to control how far [`SimulationTime`] is advanced.
 ///
 /// [`SimulationPlugin`] will advance [`SimulationTime`] up to this point whenever it's schedule runs.
+///
+/// This resource is advanced by the client/server plugin at the same rate as the [`Real`] clock,
+/// and can be read between [`SimulationUpdate`]s for interpolation.
 #[derive(Resource, Default, Deref, DerefMut)]
-pub(crate) struct SimulationTimeTarget(pub Duration);
+pub struct SimulationTimeTarget(pub Duration);
 
 /// A resource that exists to inform the simulation where it is running.
 ///

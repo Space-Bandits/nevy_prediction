@@ -141,7 +141,7 @@ where
 #[derive(Component)]
 pub struct PredictionServerConnection;
 
-fn drive_simulation_time(mut target_time: ResMut<SimulationTimeTarget>, time: Res<Time>) {
+fn drive_simulation_time(mut target_time: ResMut<SimulationTimeTarget>, time: Res<Time<Real>>) {
     **target_time += time.delta();
 }
 

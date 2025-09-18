@@ -108,7 +108,7 @@ pub struct SimulationUpdatesStream;
 #[derive(Component)]
 pub struct PredictionClient;
 
-fn drive_simulation_time(mut target_time: ResMut<SimulationTimeTarget>, time: Res<Time>) {
+fn drive_simulation_time(mut target_time: ResMut<SimulationTimeTarget>, time: Res<Time<Real>>) {
     **target_time += time.delta();
 }
 
