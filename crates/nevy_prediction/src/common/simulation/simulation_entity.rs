@@ -56,7 +56,7 @@ pub fn build(app: &mut App) {
 #[component(immutable)]
 pub struct SimulationEntity(pub u64);
 
-/// This component is updated using the lifecycle hooks of [SimulationEntity] to track which [Entity]
+/// This resource is updated using the lifecycle hooks of [SimulationEntity] to track which [Entity]
 /// in the local world belongs to a [SimulationEntity].
 #[derive(Resource, Default)]
 pub struct SimulationEntityMap {
