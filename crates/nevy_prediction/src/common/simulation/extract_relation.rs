@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use bevy::{ecs::relationship::Relationship, prelude::*};
 
 use crate::common::simulation::{
-    ExtractSchedule, ExtractSimulationSystems, SourceWorld,
+    ExtractSimulation, ExtractSimulationSystems, SourceWorld,
     simulation_entity::{SimulationEntity, SimulationEntityMap},
 };
 
@@ -24,7 +24,7 @@ where
 {
     fn build(&self, app: &mut App) {
         app.add_systems(
-            ExtractSchedule,
+            ExtractSimulation,
             extract_relation::<C>.in_set(ExtractSimulationSystems::ExtractComponents),
         );
     }
