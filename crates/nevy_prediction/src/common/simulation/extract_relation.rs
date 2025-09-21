@@ -12,6 +12,12 @@ use crate::common::simulation::{
 /// This plugin expects all simulation entities that have a relation be related to another simulation entity.
 pub struct ExtractSimulationRelationPlugin<C>(PhantomData<C>);
 
+impl<C> Default for ExtractSimulationRelationPlugin<C> {
+    fn default() -> Self {
+        Self(PhantomData)
+    }
+}
+
 impl<C> Plugin for ExtractSimulationRelationPlugin<C>
 where
     C: Component + Relationship,
