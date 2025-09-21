@@ -56,6 +56,12 @@ pub fn build(app: &mut App) {
 #[component(immutable)]
 pub struct SimulationEntity(pub u64);
 
+impl std::fmt::Display for SimulationEntity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Simulation({})", self.0)
+    }
+}
+
 /// This resource is updated using the lifecycle hooks of [SimulationEntity] to track which [Entity]
 /// in the local world belongs to a [SimulationEntity].
 #[derive(Resource, Default)]

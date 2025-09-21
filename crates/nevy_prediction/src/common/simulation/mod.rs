@@ -24,6 +24,7 @@ use crate::common::{
 };
 
 pub mod extract_component;
+pub mod extract_relation;
 pub mod extract_resource;
 pub mod simulation_entity;
 pub mod update_component;
@@ -50,6 +51,10 @@ pub struct ExtractSimulation;
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ExtractSimulationSystems {
     ExtractEntities,
+    /// Where components and relations added by
+    /// [`ExtractSimulationComponentPlugin`](extract_component::ExtractSimulationComponentPlugin)
+    /// and relations added by [`ExtractSimulationRelationPlugin`](extract_relation::ExtractSimulationRelationPlugin)
+    /// are extracted.
     ExtractComponents,
 }
 

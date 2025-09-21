@@ -20,6 +20,7 @@ pub mod prelude {
             SimulationStartup, SimulationTime, SimulationUpdate, SourceWorld, UpdateExecutionQueue,
             WorldUpdate,
             extract_component::ExtractSimulationComponentPlugin,
+            extract_relation::ExtractSimulationRelationPlugin,
             extract_resource::ExtractSimulationResourcePlugin,
             simulation_entity::{
                 DespawnSimulationEntities, DespawnSimulatonEntity, SimulationEntity,
