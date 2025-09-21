@@ -248,6 +248,7 @@ pub struct ReadyUpdates<'w, T>
 where
     T: Send + Sync + 'static,
 {
+    instance: Res<'w, SimulationInstance>,
     updates: ResMut<'w, UpdateExecutionQueue<T>>,
     time: ResMut<'w, Time<SimulationTime>>,
 }
@@ -265,9 +266,10 @@ where
 
             if update.time != self.time.elapsed() {
                 warn!(
-                    "Returned an update for {} late at {}",
-                    update.time.as_millis(),
-                    self.time.elapsed().as_millis()
+                    "Returned an update `{}` late by {:?} in instance {:?}",
+                    std::any::type_name::<T>(),
+                    self.time.elapsed().saturating_sub(update.time),
+                    *self.instance,
                 )
             }
 
