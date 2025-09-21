@@ -27,13 +27,7 @@ impl<C> Default for UpdateComponentPlugin<C> {
 
 impl<C> Plugin for UpdateComponentPlugin<C>
 where
-    C: Send
-        + Sync
-        + 'static
-        + Serialize
-        + DeserializeOwned
-        + Clone
-        + Component<Mutability = Mutable>,
+    C: Serialize + DeserializeOwned + Clone + Component<Mutability = Mutable>,
 {
     fn build(&self, app: &mut App) {
         app.add_world_update::<UpdateComponent<C>>();
@@ -47,8 +41,7 @@ where
 
 /// This is a world updated added by [`UpdateComponentPlugin<C>`].
 ///
-/// It updates a component on a simulation entity.
-/// It will fail if the simulation entity or component does not already exist.
+/// It updates a component on a simulation entity, inserting it if it doesn't exist.
 #[derive(Serialize, Deserialize, Clone)]
 pub struct UpdateComponent<C> {
     pub entity: SimulationEntity,
@@ -57,11 +50,12 @@ pub struct UpdateComponent<C> {
 
 fn update_component<C>(
     mut updates: ReadyUpdates<UpdateComponent<C>>,
+    mut commands: Commands,
     map: Res<SimulationEntityMap>,
-    mut query: Query<&mut C>,
+    mut component_q: Query<&mut C>,
 ) -> Result
 where
-    C: Send + Sync + 'static + Component<Mutability = Mutable>,
+    C: Component<Mutability = Mutable>,
 {
     for UpdateComponent { entity, component } in updates.drain() {
         let local_entity = map.get(entity).ok_or(format!(
@@ -70,7 +64,11 @@ where
             std::any::type_name::<C>()
         ))?;
 
-        *query.get_mut(local_entity)? = component;
+        if let Ok(mut current_component) = component_q.get_mut(local_entity) {
+            *current_component = component;
+        } else {
+            commands.entity(local_entity).insert(component);
+        }
     }
 
     Ok(())
