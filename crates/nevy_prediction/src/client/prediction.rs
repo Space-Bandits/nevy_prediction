@@ -12,7 +12,7 @@ use crate::{
         scheme::PredictionScheme,
         simulation::{
             SimulationInstance, SimulationPlugin, SimulationStartup, SimulationTime,
-            SimulationTimeTarget, UpdateExecutionQueue, WorldUpdateQueue,
+            SimulationTimeExt, UpdateExecutionQueue, WorldUpdateQueue,
         },
     },
 };
@@ -102,19 +102,19 @@ fn poll_prediction_world(mut prediction_world: NonSendMut<PredictionWorld>) {
 }
 
 fn set_prediction_target(
-    simulation_target: Res<SimulationTimeTarget>,
+    simulation_time: Res<Time<SimulationTime>>,
     mut prediction_world_state: NonSendMut<PredictionWorld>,
 ) {
     let Some(prediction_world) = prediction_world_state.world.get() else {
         return;
     };
 
-    let mut current_target = prediction_world.resource_mut::<SimulationTimeTarget>();
+    let mut prediction_time = prediction_world.resource_mut::<Time<SimulationTime>>();
 
-    let prediction_target = **simulation_target;
+    let prediction_target = simulation_time.context().target;
 
-    if prediction_target > **current_target {
-        **current_target = prediction_target;
+    if prediction_target > prediction_time.context().target {
+        prediction_time.context_mut().target = prediction_target;
         prediction_world_state.prediction_needed = true;
     }
 }
@@ -138,8 +138,9 @@ fn extract_predicton_world(world: &mut World, mut scratch_world: Local<Option<Wo
     std::mem::swap(&mut owned_prediction_world, prediction_world);
 
     // Extract the simulation time from the source world.
-    *world.resource_mut::<Time<SimulationTime>>() =
-        (*owned_prediction_world.resource::<Time<SimulationTime>>()).clone();
+    owned_prediction_world
+        .resource::<Time<SimulationTime>>()
+        .extract_time(world.resource_mut::<Time<SimulationTime>>().as_mut());
 
     // Insert server world and run extract schedule.
     world.insert_resource(SourceWorld(owned_prediction_world));
@@ -188,8 +189,13 @@ fn extract_server_world(
     std::mem::swap(&mut owned_server_world, server_world_app);
 
     // Extract the simulation time from the source world.
-    *prediction_app.resource_mut::<Time<SimulationTime>>() =
-        (*owned_server_world.resource::<Time<SimulationTime>>()).clone();
+    owned_server_world
+        .resource::<Time<SimulationTime>>()
+        .extract_time(
+            prediction_app
+                .resource_mut::<Time<SimulationTime>>()
+                .as_mut(),
+        );
 
     // Insert server world and run extract schedule.
     prediction_app.insert_resource(SourceWorld(owned_server_world));

@@ -70,20 +70,22 @@ pub struct SourceWorld(pub World);
 ///
 /// When outside of [`SimulationUpdate`] this time resource will contain the time of the next simulation step.
 #[derive(Default, Clone)]
-pub struct SimulationTime;
+pub struct SimulationTime {
+    pub target: Duration,
+}
 
 /// System set where [`SimulationUpdate`] is run.
 #[derive(SystemSet, Clone, Copy, Default, Debug, PartialEq, Eq, Hash)]
 pub struct StepSimulationSystems;
 
-/// This resource is used to control how far [`SimulationTime`] is advanced.
-///
-/// [`SimulationPlugin`] will advance [`SimulationTime`] up to this point whenever it's schedule runs.
-///
-/// This resource is advanced by the client/server plugin at the same rate as the [`Real`] clock,
-/// and can be read between [`SimulationUpdate`]s for interpolation.
-#[derive(Resource, Default, Deref, DerefMut)]
-pub struct SimulationTimeTarget(pub Duration);
+// /// This resource is used to control how far [`SimulationTime`] is advanced.
+// ///
+// /// [`SimulationPlugin`] will advance [`SimulationTime`] up to this point whenever it's schedule runs.
+// ///
+// /// This resource is advanced by the client/server plugin at the same rate as the [`Real`] clock,
+// /// and can be read between [`SimulationUpdate`]s for interpolation.
+// #[derive(Resource, Default, Deref, DerefMut)]
+// pub struct SimulationTimeTarget(pub Duration);
 
 /// A resource that exists to inform the simulation where it is running.
 ///
@@ -137,7 +139,6 @@ where
             app.init_resource::<Time>();
         }
         app.init_resource::<Time<SimulationTime>>();
-        app.init_resource::<SimulationTimeTarget>();
 
         app.add_systems(
             self.schedule,
@@ -167,7 +168,7 @@ where
     // Save the current generic time to replace it after overwriting it with `SimulationTime`.
     let old_time = world.resource::<Time>().clone();
 
-    let &SimulationTimeTarget(target_time) = world.resource::<SimulationTimeTarget>();
+    let target_time = world.resource::<Time<SimulationTime>>().context().target;
     let step_interval = S::step_interval();
 
     loop {
@@ -275,5 +276,20 @@ where
 
             Some(update.update)
         })
+    }
+}
+
+pub trait SimulationTimeExt {
+    fn extract_time(&self, other: &mut Self);
+}
+
+impl SimulationTimeExt for Time<SimulationTime> {
+    /// Extracts the clock without copying the target time.
+    fn extract_time(&self, other: &mut Self) {
+        let mut extracted_time = self.clone();
+
+        std::mem::swap(extracted_time.context_mut(), other.context_mut());
+
+        *other = extracted_time;
     }
 }

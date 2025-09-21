@@ -22,7 +22,7 @@ use crate::{
         scheme::PredictionScheme,
         simulation::{
             SimulationInstance, SimulationPlugin, SimulationStartup, SimulationTime,
-            SimulationTimeTarget, UpdateExecutionQueue,
+            UpdateExecutionQueue,
         },
     },
 };
@@ -128,18 +128,18 @@ struct ServerWorldTime(pub Duration);
 
 fn receive_time_updates(
     mut message_q: Query<&mut ReceivedMessages<UpdateServerTime>>,
-    mut time: ResMut<ServerWorldTime>,
-    mut time_target: ResMut<SimulationTimeTarget>,
+    mut server_world_time: ResMut<ServerWorldTime>,
+    mut time: ResMut<Time<SimulationTime>>,
     prediction_interval: Res<PredictionInterval>,
 ) -> Result {
     for mut messages in &mut message_q {
         for UpdateServerTime { simulation_time } in messages.drain() {
-            **time = simulation_time;
+            **server_world_time = simulation_time;
 
             let desired_target = simulation_time + **prediction_interval;
-            let actual_target = **time_target;
+            let actual_target = time.context().target;
 
-            **time_target = Duration::from_secs_f64(
+            time.context_mut().target = Duration::from_secs_f64(
                 actual_target.as_secs_f64() * 0.95 + desired_target.as_secs_f64() * 0.05,
             );
         }
@@ -157,7 +157,10 @@ fn run_server_world(time: Res<ServerWorldTime>, mut server_world: NonSendMut<Ser
     let target_time = **time;
 
     if target_time > current_time {
-        **world.resource_mut::<SimulationTimeTarget>() = target_time;
+        world
+            .resource_mut::<Time<SimulationTime>>()
+            .context_mut()
+            .target = target_time;
         server_world.update(false);
     }
 }

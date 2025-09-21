@@ -12,12 +12,12 @@ use crate::{
         server_world::ServerWorld,
     },
     common::{
+        ResetClientSimulation,
         scheme::PredictionScheme,
         simulation::{
             ResetSimulation, SimulationInstance, SimulationPlugin, SimulationTime,
-            SimulationTimeTarget, StepSimulationSystems, WorldUpdate,
+            StepSimulationSystems, WorldUpdate,
         },
-        ResetClientSimulation,
     },
     server::prelude::UpdateExecutionQueue,
 };
@@ -28,13 +28,13 @@ pub(crate) mod server_world;
 
 pub mod prelude {
     pub use crate::client::{
-        prediction::PredictionInterval, ClientSimulationSystems, NevyPredictionClientPlugin,
-        PredictionServerConnection, PredictionUpdateCreator,
+        ClientSimulationSystems, NevyPredictionClientPlugin, PredictionServerConnection,
+        PredictionUpdateCreator, prediction::PredictionInterval,
     };
     pub use crate::common::simulation::{
+        SimulationTime, SimulationUpdate, StepSimulationSystems, WorldUpdate,
         simulation_entity::{SimulationEntity, SimulationEntityMap},
         update_component::UpdateComponent,
-        SimulationTime, SimulationTimeTarget, SimulationUpdate, StepSimulationSystems, WorldUpdate,
     };
 }
 
@@ -141,8 +141,8 @@ where
 #[derive(Component)]
 pub struct PredictionServerConnection;
 
-fn drive_simulation_time(mut target_time: ResMut<SimulationTimeTarget>, time: Res<Time<Real>>) {
-    **target_time += time.delta();
+fn drive_simulation_time(mut time: ResMut<Time<SimulationTime>>, real_time: Res<Time<Real>>) {
+    time.context_mut().target += real_time.delta();
 }
 
 fn receive_reset_simulations(
@@ -187,10 +187,11 @@ fn reset_simulations(In(reset): In<Option<Duration>>, world: &mut World) {
 
     let prediction_interval = **world.resource::<PredictionInterval>();
 
-    let mut time = Time::new_with(SimulationTime);
+    let mut time = Time::new_with(SimulationTime {
+        target: elapsed + prediction_interval,
+    });
     time.advance_to(elapsed + prediction_interval);
     world.insert_resource(time);
-    world.insert_resource(SimulationTimeTarget(elapsed + prediction_interval));
 
     world.run_schedule(ResetSimulation);
 }

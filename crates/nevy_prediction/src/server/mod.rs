@@ -11,8 +11,8 @@ use crate::common::{
     ResetClientSimulation, ServerWorldUpdate, UpdateServerTime,
     scheme::PredictionScheme,
     simulation::{
-        SimulationInstance, SimulationPlugin, SimulationTime, SimulationTimeTarget,
-        SimulationUpdate, StepSimulationSystems, WorldUpdate,
+        SimulationInstance, SimulationPlugin, SimulationTime, SimulationUpdate,
+        StepSimulationSystems, WorldUpdate,
     },
 };
 
@@ -21,7 +21,7 @@ pub mod prelude {
         common::{
             ServerWorldUpdate,
             simulation::{
-                SimulationTimeTarget, UpdateExecutionQueue, WorldUpdate,
+                SimulationTime, UpdateExecutionQueue, WorldUpdate,
                 simulation_entity::{SimulationEntity, SimulationEntityMap},
                 update_component::UpdateComponent,
             },
@@ -108,8 +108,8 @@ pub struct SimulationUpdatesStream;
 #[derive(Component)]
 pub struct PredictionClient;
 
-fn drive_simulation_time(mut target_time: ResMut<SimulationTimeTarget>, time: Res<Time<Real>>) {
-    **target_time += time.delta();
+fn drive_simulation_time(mut time: ResMut<Time<SimulationTime>>, real_time: Res<Time<Real>>) {
+    time.context_mut().target += real_time.delta();
 }
 
 fn send_simulation_time_updates<S>(

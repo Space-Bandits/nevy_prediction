@@ -8,7 +8,7 @@ use bevy::{
     tasks::{AsyncComputeTaskPool, Task, block_on, poll_once},
 };
 
-use crate::common::simulation::{ResetSimulation, SimulationTime, SimulationTimeTarget};
+use crate::common::simulation::{ResetSimulation, SimulationTime};
 
 pub(crate) struct ParallelWorld {
     state: ParallelWorldState,
@@ -58,10 +58,9 @@ impl ParallelWorld {
             if let Some(elapsed) = self.reset.take() {
                 self.reset = None;
 
-                let mut time = Time::new_with(SimulationTime);
+                let mut time = Time::new_with(SimulationTime { target: elapsed });
                 time.advance_to(elapsed);
                 world.insert_resource(time);
-                world.insert_resource(SimulationTimeTarget(elapsed));
 
                 world.run_schedule(ResetSimulation);
             }
