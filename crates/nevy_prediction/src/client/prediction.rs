@@ -149,7 +149,7 @@ fn extract_predicton_world(world: &mut World, mut scratch_world: Local<Option<Wo
         .remove_resource()
         .ok_or("Extract schedule removed the `SourceWorld`")?;
 
-    // Swap server world back and replace scratch world.
+    // Swap world back and replace scratch world.
     std::mem::swap(&mut owned_prediction_world, prediction_world);
     *scratch_world = Some(owned_prediction_world);
 
