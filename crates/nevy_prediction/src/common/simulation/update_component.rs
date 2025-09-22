@@ -6,7 +6,8 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use crate::common::{
     scheme::AddWorldUpdate,
     simulation::{
-        ReadyUpdates, SimulationUpdate,
+        ReadyUpdates,
+        schedules::SimulationUpdate,
         simulation_entity::{SimulationEntity, SimulationEntityMap},
     },
 };

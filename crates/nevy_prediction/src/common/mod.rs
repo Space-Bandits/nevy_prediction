@@ -1,12 +1,13 @@
-use std::time::Duration;
-
 use bevy::prelude::*;
 use nevy::*;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use crate::common::{
     scheme::PredictionScheme,
-    simulation::{ResetSimulation, SimulationStartup, WorldUpdate},
+    simulation::{
+        SimulationTick, WorldUpdate,
+        schedules::{ResetSimulation, SimulationStartup},
+    },
 };
 
 pub mod scheme;
@@ -16,12 +17,12 @@ pub mod prelude {
     pub use crate::common::{
         scheme::{AddWorldUpdate, PredictionScheme},
         simulation::{
-            ExtractSimulation, ExtractSimulationSystems, ReadyUpdates, SimulationInstance,
-            SimulationStartup, SimulationTime, SimulationUpdate, SourceWorld, UpdateExecutionQueue,
-            WorldUpdate,
+            ExtractSimulationSystems, ReadyUpdates, SimulationInstance, SimulationTick,
+            SimulationTime, SimulationTimeExt, SourceWorld, UpdateExecutionQueue, WorldUpdate,
             extract_component::ExtractSimulationComponentPlugin,
             extract_relation::ExtractSimulationRelationPlugin,
             extract_resource::ExtractSimulationResourcePlugin,
+            schedules::{ExtractSimulation, SimulationStartup, SimulationUpdate},
             simulation_entity::{
                 DespawnSimulationEntities, DespawnSimulatonEntity, SimulationEntity,
                 SimulationEntityMap,
@@ -37,7 +38,7 @@ where
     S: PredictionScheme,
 {
     app.add_message::<ResetClientSimulation>();
-    app.add_message::<UpdateServerTime>();
+    app.add_message::<UpdateServerTick>();
 
     app.add_systems(Startup, startup_simulation);
 
@@ -63,7 +64,7 @@ fn startup_simulation(world: &mut World) {
 /// Server -> Client message to reset the simulation.
 #[derive(Serialize, Deserialize)]
 pub(crate) struct ResetClientSimulation {
-    pub simulation_time: Duration,
+    pub simulation_tick: SimulationTick,
 }
 
 /// Server -> Client message to update the current simulation time on the server.
@@ -71,8 +72,8 @@ pub(crate) struct ResetClientSimulation {
 /// This will cause the client to advance its current copy of the server's simulation,
 /// applying any [`ServerWorldUpdate`]s it received before this message.
 #[derive(Serialize, Deserialize)]
-pub(crate) struct UpdateServerTime {
-    pub simulation_time: Duration,
+pub(crate) struct UpdateServerTick {
+    pub simulation_tick: SimulationTick,
 }
 
 /// Server -> Client message to apply a [`WorldUpdate`].

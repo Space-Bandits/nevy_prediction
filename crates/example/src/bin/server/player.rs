@@ -116,11 +116,11 @@ fn accept_move_players(
     for (requesting_client_entity, &ClientPlayer { player_entity }, mut messages) in
         &mut requesting_client_q
     {
-        for RequestMovePlayer { time, input } in messages.drain() {
+        for RequestMovePlayer { tick, input } in messages.drain() {
             let &player_simulation_entity = player_q.get(player_entity)?;
 
             let update = WorldUpdate {
-                time,
+                tick,
                 update: UpdateComponent {
                     entity: player_simulation_entity,
                     component: input,

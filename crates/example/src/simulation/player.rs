@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use bevy::prelude::*;
 use nevy_prediction::common::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -53,7 +51,7 @@ pub struct SetLocalPlayer {
 /// Client -> Server message to request movement of the player.
 #[derive(Serialize, Deserialize)]
 pub struct RequestMovePlayer {
-    pub time: Duration,
+    pub tick: SimulationTick,
     pub input: PlayerInput,
 }
 

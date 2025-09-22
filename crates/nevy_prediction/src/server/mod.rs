@@ -1,4 +1,4 @@
-use std::marker::PhantomData;
+use std::{marker::PhantomData, time::Duration};
 
 use bevy::{
     ecs::{intern::Interned, schedule::ScheduleLabel, system::SystemParam},
@@ -8,11 +8,11 @@ use nevy::*;
 use serde::Serialize;
 
 use crate::common::{
-    ResetClientSimulation, ServerWorldUpdate, UpdateServerTime,
+    ResetClientSimulation, ServerWorldUpdate, UpdateServerTick,
     scheme::PredictionScheme,
     simulation::{
-        SimulationInstance, SimulationPlugin, SimulationTime, SimulationUpdate,
-        StepSimulationSystems, WorldUpdate,
+        PrivateSimulationTimeExt, SimulationInstance, SimulationPlugin, SimulationTime,
+        SimulationTimeExt, StepSimulationSystems, WorldUpdate, schedules::SimulationUpdate,
     },
 };
 
@@ -21,7 +21,7 @@ pub mod prelude {
         common::{
             ServerWorldUpdate,
             simulation::{
-                SimulationTime, UpdateExecutionQueue, WorldUpdate,
+                SimulationTime, SimulationTimeExt, UpdateExecutionQueue, WorldUpdate,
                 simulation_entity::{SimulationEntity, SimulationEntityMap},
                 update_component::UpdateComponent,
             },
@@ -93,7 +93,7 @@ where
 
         app.add_systems(
             self.schedule,
-            (drive_simulation_time, send_simulation_resets::<S>)
+            (drive_simulation_time::<S>, send_simulation_resets::<S>)
                 .in_set(ServerSimulationSystems::QueueUpdatesSystems),
         );
 
@@ -108,15 +108,30 @@ pub struct SimulationUpdatesStream;
 #[derive(Component)]
 pub struct PredictionClient;
 
-fn drive_simulation_time(mut time: ResMut<Time<SimulationTime>>, real_time: Res<Time<Real>>) {
-    time.context_mut().target += real_time.delta();
+fn drive_simulation_time<S>(
+    mut time: ResMut<Time<SimulationTime>>,
+    real_time: Res<Time<Real>>,
+    mut overstep: Local<Duration>,
+) where
+    S: PredictionScheme,
+{
+    *overstep += real_time.delta();
+
+    loop {
+        if *overstep < S::step_interval() {
+            break;
+        }
+        *overstep -= S::step_interval();
+
+        time.queue_ticks(1);
+    }
 }
 
 fn send_simulation_time_updates<S>(
     time: Res<Time<SimulationTime>>,
     client_q: Query<Entity, With<PredictionClient>>,
     mut messages: SharedMessageSender<SimulationUpdatesStream>,
-    message_id: Res<MessageId<UpdateServerTime>>,
+    message_id: Res<MessageId<UpdateServerTick>>,
 ) -> Result
 where
     S: PredictionScheme,
@@ -127,8 +142,8 @@ where
             client_entity,
             *message_id,
             true,
-            &UpdateServerTime {
-                simulation_time: time.elapsed(),
+            &UpdateServerTick {
+                simulation_tick: time.current_tick(),
             },
         )?;
     }
@@ -152,7 +167,7 @@ where
             *message_id,
             true,
             &ResetClientSimulation {
-                simulation_time: time.elapsed(),
+                simulation_tick: time.current_tick(),
             },
         )?;
     }
@@ -203,7 +218,7 @@ impl<'w, 's> WorldUpdateSender<'w, 's> {
             queue,
             false,
             WorldUpdate {
-                time: self.time.elapsed(),
+                tick: self.time.current_tick(),
                 update,
             },
         )

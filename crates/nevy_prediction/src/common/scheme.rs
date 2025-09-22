@@ -48,7 +48,7 @@ impl AddWorldUpdate for App {
                 crate::common::build_update::<T>(self);
                 crate::common::simulation::build_update::<T>(self);
             }
-            SimulationInstance::ClientServerWorld => {
+            SimulationInstance::ClientTemplate => {
                 crate::common::simulation::build_update::<T>(self);
             }
             SimulationInstance::ClientPrediction => {

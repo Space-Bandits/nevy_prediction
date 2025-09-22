@@ -38,10 +38,7 @@ fn extrapolate_players(mut player_q: Query<(&mut Transform, &PlayerState)>, time
 
 fn render_players(mut gizmos: Gizmos, player_q: Query<&GlobalTransform>) {
     for transform in &player_q {
-        gizmos.cuboid(
-            *transform,
-            WHITE,
-        );
+        gizmos.cuboid(*transform, WHITE);
     }
 }
 
@@ -85,7 +82,7 @@ fn update_player_input(
         *message_id,
         false,
         &RequestMovePlayer {
-            time: update.time,
+            tick: update.tick,
             input: player_input,
         },
     )?;

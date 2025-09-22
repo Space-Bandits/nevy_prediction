@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 use crate::common::{
     scheme::AddWorldUpdate,
     simulation::{
-        ExtractSimulation, ExtractSimulationSystems, ReadyUpdates, ResetSimulation,
-        SimulationUpdate, SourceWorld,
+        ExtractSimulation, ExtractSimulationSystems, ReadyUpdates, SimulationUpdate, SourceWorld,
+        schedules::ResetSimulation,
     },
 };
 
