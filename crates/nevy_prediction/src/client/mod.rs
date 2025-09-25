@@ -47,7 +47,7 @@ pub enum ClientSimulationSystems {
     /// Runs first, where the [`ResetSimulation`] schedule is run if needed.
     ResetSimulation,
     /// Simulation time updates are received by the server.
-    ReceiveTime,
+    ReceiveUpdates,
     /// User queues world updates.
     QueueUpdates,
     RunTemplateWorld,
@@ -88,7 +88,7 @@ where
             self.schedule,
             (
                 ClientSimulationSystems::ResetSimulation,
-                ClientSimulationSystems::ReceiveTime,
+                ClientSimulationSystems::ReceiveUpdates,
                 ClientSimulationSystems::QueueUpdates,
                 StepSimulationSystems,
                 ClientSimulationSystems::RunTemplateWorld,
@@ -114,7 +114,7 @@ where
                 receive_reset_simulations
                     .pipe(reset_simulations::<S>)
                     .in_set(ClientSimulationSystems::ResetSimulation),
-                drive_simulation_time::<S>.in_set(ClientSimulationSystems::ReceiveTime),
+                drive_simulation_time::<S>.in_set(ClientSimulationSystems::ReceiveUpdates),
             ),
         );
 

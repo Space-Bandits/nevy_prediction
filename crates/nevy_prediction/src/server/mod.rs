@@ -12,7 +12,7 @@ use crate::common::{
     scheme::PredictionScheme,
     simulation::{
         PrivateSimulationTimeExt, SimulationInstance, SimulationPlugin, SimulationTime,
-        SimulationTimeExt, StepSimulationSystems, WorldUpdate, schedules::SimulationUpdate,
+        SimulationTimeExt, StepSimulationSystems, WorldUpdate, schedules::SimulationPostUpdate,
     },
 };
 
@@ -39,8 +39,9 @@ pub mod prelude {
 
 #[derive(SystemSet, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ServerSimulationSystems {
-    QueueUpdatesSystems,
-    RunSimulationSystems,
+    SendResets,
+    QueueUpdates,
+    RunSimulation,
 }
 
 pub struct NevyPredictionServerPlugin<S> {
@@ -78,10 +79,14 @@ where
         app.configure_sets(
             self.schedule,
             (
-                ServerSimulationSystems::QueueUpdatesSystems,
-                ServerSimulationSystems::RunSimulationSystems,
-            )
-                .chain(),
+                (
+                    ServerSimulationSystems::SendResets,
+                    ServerSimulationSystems::QueueUpdates,
+                    ServerSimulationSystems::RunSimulation,
+                )
+                    .chain(),
+                StepSimulationSystems.in_set(ServerSimulationSystems::RunSimulation),
+            ),
         );
 
         app.add_plugins(SimulationPlugin::<S> {
@@ -90,18 +95,15 @@ where
             instance: SimulationInstance::Server,
         });
 
-        app.configure_sets(
-            self.schedule,
-            StepSimulationSystems.in_set(ServerSimulationSystems::RunSimulationSystems),
-        );
-
         app.add_systems(
             self.schedule,
-            (drive_simulation_time::<S>, send_simulation_resets::<S>)
-                .in_set(ServerSimulationSystems::QueueUpdatesSystems),
+            (
+                send_simulation_resets::<S>.in_set(ServerSimulationSystems::SendResets),
+                drive_simulation_time::<S>.in_set(ServerSimulationSystems::QueueUpdates),
+            ),
         );
 
-        app.add_systems(SimulationUpdate, send_simulation_time_updates::<S>);
+        app.add_systems(SimulationPostUpdate, send_simulation_time_updates::<S>);
     }
 }
 

@@ -16,7 +16,7 @@ pub fn build(app: &mut App) {
         (
             (spawn_players, init_players)
                 .chain()
-                .in_set(ServerSimulationSystems::QueueUpdatesSystems),
+                .in_set(ServerSimulationSystems::QueueUpdates),
             accept_move_players,
         ),
     );

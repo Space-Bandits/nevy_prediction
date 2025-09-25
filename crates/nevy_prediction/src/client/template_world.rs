@@ -37,7 +37,7 @@ where
     app.add_systems(
         schedule,
         (
-            receive_time_updates::<S>.in_set(ClientSimulationSystems::ReceiveTime),
+            receive_time_updates::<S>.in_set(ClientSimulationSystems::ReceiveUpdates),
             run_template_world.in_set(ClientSimulationSystems::RunTemplateWorld),
         ),
     );
@@ -47,7 +47,10 @@ pub(crate) fn build_update<T>(app: &mut App, schedule: Interned<dyn ScheduleLabe
 where
     T: Send + Sync + 'static + Clone,
 {
-    app.add_systems(schedule, receive_world_updates::<T>);
+    app.add_systems(
+        schedule,
+        receive_world_updates::<T>.in_set(ClientSimulationSystems::ReceiveUpdates),
+    );
 }
 
 /// Contains a [`SimulationWorld`] that holds the most recently known state of the simulation according to the server.
@@ -180,13 +183,6 @@ where
     for mut messages in &mut message_q {
         for UpdateServerTick { simulation_tick } in messages.drain() {
             tick_samples.push::<S>(real_time.elapsed(), simulation_tick);
-
-            // let desired_target = simulation_time + **prediction_interval;
-            // let actual_target = time.context().target;
-
-            // time.context_mut().target = Duration::from_secs_f64(
-            //     actual_target.as_secs_f64() * 0.95 + desired_target.as_secs_f64() * 0.05,
-            // );
         }
     }
 
