@@ -93,25 +93,20 @@ impl PredictionWorld {
     }
 }
 
-fn run_prediction_world(
-    world: &mut World,
-    // mut prediction_world: ResMut<PredictionWorld>,
-    // mut template_world: ResMut<TemplateWorld>,
-    // mut budget: ResMut<PredictionBudget>,
-    // time: Res<Time<SimulationTime>>,
-    // mut last_predicted_tick: ResMut<LastPredictedTick>,
-) {
+fn run_prediction_world(world: &mut World) {
     let mut prediction_world = world.remove_resource::<PredictionWorld>().unwrap();
 
     loop {
         match prediction_world.state {
             PredictionWorldState::Idle => {
-                if world
+                let current_template_tick = world
                     .resource::<TemplateWorld>()
                     .resource::<Time<SimulationTime>>()
-                    .current_tick()
-                    == **world.resource::<LastPredictedTick>()
-                {
+                    .current_tick();
+
+                let last_predicted_tick = **world.resource::<LastPredictedTick>();
+
+                if current_template_tick == last_predicted_tick {
                     break;
                 }
 
@@ -124,6 +119,8 @@ fn run_prediction_world(
                     .clear_target();
 
                 prediction_world.state = PredictionWorldState::Running;
+
+                debug!("Started prediction app")
             }
             PredictionWorldState::Running => {
                 let current_tick = prediction_world
@@ -133,37 +130,28 @@ fn run_prediction_world(
 
                 let mut budget = world.resource_mut::<PredictionBudget>();
 
-                let desired_ticks = desired_tick.saturating_sub(*current_tick);
-                let execute_ticks = desired_ticks.min(budget.prediction);
-
-                if execute_ticks == 0 {
-                    prediction_world.state = PredictionWorldState::Idle;
+                if budget.prediction == 0 {
+                    // not enough prediction budget
                     break;
                 }
 
-                let current_target = prediction_world
-                    .resource::<Time<SimulationTime>>()
-                    .target_tick();
+                let desired_ticks = desired_tick.saturating_sub(*current_tick);
+                let execute_ticks = desired_ticks.min(budget.prediction);
 
-                debug!(
-                    "currently at {:?}, with target {:?}, want to be at {:?}, executing {} ticks",
-                    current_tick, current_target, desired_tick, execute_ticks
-                );
+                debug!("Running prediction app for {} ticks", execute_ticks);
 
                 budget.prediction -= execute_ticks;
-
-                prediction_world
-                    .resource_mut::<Time<SimulationTime>>()
-                    .queue_ticks(execute_ticks);
-
-                prediction_world.run();
+                prediction_world.run(execute_ticks);
 
                 if desired_tick
                     == prediction_world
                         .resource::<Time<SimulationTime>>()
                         .current_tick()
                 {
+                    debug!("Finished prediction and extracting");
+
                     prediction_world.extract(world);
+                    prediction_world.state = PredictionWorldState::Idle;
                 }
             }
         }
@@ -206,6 +194,9 @@ fn drain_prediction_updates<T>(
     }
 }
 
+/// Runs in [`SimulationPreUpdate`] on the prediction app.
+///
+/// Queues any updates that should happen this tick on the prediction app.
 fn queue_prediction_updates<T>(
     prediction_updates: Res<PredictionUpdates<T>>,
     mut queue: ResMut<UpdateExecutionQueue<T>>,
@@ -216,6 +207,11 @@ fn queue_prediction_updates<T>(
     for update in prediction_updates.iter() {
         if update.tick == time.current_tick() {
             queue.insert(update.clone());
+
+            debug!(
+                "queued an update {} for prediction",
+                std::any::type_name::<T>()
+            );
         }
     }
 }

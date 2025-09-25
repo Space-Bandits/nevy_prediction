@@ -19,7 +19,7 @@ impl PredictionScheme for PhysicsScheme {
     }
 
     fn step_interval() -> Duration {
-        Duration::from_secs_f32(1. / 10.)
+        Duration::from_secs_f32(1. / 30.)
     }
 }
 
@@ -28,11 +28,5 @@ pub struct SimulationPlugin;
 impl Plugin for SimulationPlugin {
     fn build(&self, app: &mut App) {
         player::build(app);
-
-        // app.add_systems(ExtractSimulation, log_extracts);
     }
 }
-
-// fn log_extracts(instance: Res<SimulationInstance>, time: Res<Time<SimulationTime>>) {
-//     debug!("Extract: {:?} {:?}", time.current_tick(), *instance);
-// }

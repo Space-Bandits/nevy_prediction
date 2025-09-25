@@ -12,12 +12,12 @@ use crate::{
         template_world::{ServerTickSamples, TemplateWorld},
     },
     common::{
+        ResetClientSimulation,
         scheme::PredictionScheme,
         simulation::{
-            schedules::ResetSimulation, PrivateSimulationTimeExt, SimulationInstance,
-            SimulationPlugin, SimulationTick, SimulationTime, StepSimulationSystems, WorldUpdate,
+            PrivateSimulationTimeExt, SimulationInstance, SimulationPlugin, SimulationTick,
+            SimulationTime, StepSimulationSystems, WorldUpdate, schedules::ResetSimulation,
         },
-        ResetClientSimulation,
     },
     server::prelude::{SimulationTimeExt, UpdateExecutionQueue},
 };
@@ -32,9 +32,9 @@ pub mod prelude {
         PredictionServerConnection, PredictionUpdateCreator,
     };
     pub use crate::common::simulation::{
+        SimulationTime, StepSimulationSystems, WorldUpdate,
         simulation_entity::{SimulationEntity, SimulationEntityMap},
         update_component::UpdateComponent,
-        SimulationTime, StepSimulationSystems, WorldUpdate,
     };
 }
 
@@ -86,12 +86,12 @@ where
                 ClientSimulationSystems::ResetSimulation,
                 ClientSimulationSystems::ReceiveTime,
                 ClientSimulationSystems::QueueUpdates,
+                StepSimulationSystems,
                 ClientSimulationSystems::RunTemplateWorld,
                 ClientSimulationSystems::QueuePredictionUpdates,
                 ClientSimulationSystems::RunPredictionWorld,
             )
-                .chain()
-                .before(StepSimulationSystems),
+                .chain(),
         );
 
         crate::common::build::<S>(app);
@@ -191,6 +191,9 @@ fn drive_simulation_time<S>(
         budget.template_overstep += rates.template;
         budget.prediction_overstep += rates.prediction;
     }
+
+    budget.template = 0;
+    budget.prediction = 0;
 
     while budget.template_overstep > 1. {
         budget.template_overstep -= 1.;

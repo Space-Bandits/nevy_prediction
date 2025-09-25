@@ -1,5 +1,5 @@
 use bevy::{color::palettes::css::*, prelude::*};
-use example::simulation::player::{PlayerInput, PlayerState, RequestMovePlayer, SetLocalPlayer};
+use example::simulation::player::{PlayerInput, RequestMovePlayer, SetLocalPlayer};
 use nevy::MessageId;
 use nevy_prediction::client::prelude::*;
 
@@ -10,10 +10,8 @@ pub fn build(app: &mut App) {
         Update,
         (
             set_local_player,
-            (extrapolate_players, render_players)
-                .chain()
-                .after(StepSimulationSystems),
-            update_player_input,
+            render_players.after(StepSimulationSystems),
+            update_player_input.in_set(ClientSimulationSystems::QueueUpdates),
         ),
     );
 }
@@ -26,13 +24,6 @@ fn set_local_player(mut commands: Commands, mut messages: ClientMessages<SetLoca
         commands.insert_resource(LocalPlayer(entity));
 
         debug!("The local player is: {:?}", entity);
-    }
-}
-
-fn extrapolate_players(mut player_q: Query<(&mut Transform, &PlayerState)>, time: Res<Time>) {
-    for (mut transform, state) in &mut player_q {
-        transform.translation +=
-            Vec3::new(state.velocity.x, 0., state.velocity.y) * time.delta_secs();
     }
 }
 

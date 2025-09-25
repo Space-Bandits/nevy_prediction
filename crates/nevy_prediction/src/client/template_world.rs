@@ -20,8 +20,8 @@ use crate::{
         ServerWorldUpdate, UpdateServerTick,
         scheme::PredictionScheme,
         simulation::{
-            PrivateSimulationTimeExt, SimulationInstance, SimulationPlugin, SimulationTick,
-            SimulationTime, UpdateExecutionQueue, schedules::SimulationStartupMain,
+            SimulationInstance, SimulationPlugin, SimulationTick, SimulationTime,
+            UpdateExecutionQueue, schedules::SimulationStartupMain,
         },
     },
     server::prelude::SimulationTimeExt,
@@ -212,9 +212,5 @@ fn run_template_world(
     let execute_ticks = desired_ticks.min(budget.template);
     budget.template -= execute_ticks;
 
-    template_world
-        .resource_mut::<Time<SimulationTime>>()
-        .queue_ticks(execute_ticks);
-
-    template_world.run();
+    template_world.run(execute_ticks);
 }

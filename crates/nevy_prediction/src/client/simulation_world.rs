@@ -28,8 +28,11 @@ impl SimulationWorld {
         SimulationWorld(world)
     }
 
-    /// Runs the [`Main`] schedule.
-    pub fn run(&mut self) {
+    /// Queues some number of ticks and runs the [`Main`] schedule.
+    pub fn run(&mut self, execute_ticks: u32) {
+        self.resource_mut::<Time<SimulationTime>>()
+            .queue_ticks(execute_ticks);
+
         self.run_schedule(Main);
     }
 

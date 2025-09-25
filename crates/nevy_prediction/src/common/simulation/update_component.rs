@@ -4,6 +4,7 @@ use bevy::{ecs::component::Mutable, prelude::*};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use crate::common::{
+    prelude::{SimulationInstance, SimulationTime, SimulationTimeExt},
     scheme::AddWorldUpdate,
     simulation::{
         ReadyUpdates,
@@ -50,10 +51,12 @@ pub struct UpdateComponent<C> {
 }
 
 fn update_component<C>(
+    instance: Res<SimulationInstance>,
     mut updates: ReadyUpdates<UpdateComponent<C>>,
     mut commands: Commands,
     map: Res<SimulationEntityMap>,
     mut component_q: Query<&mut C>,
+    time: Res<Time<SimulationTime>>,
 ) -> Result
 where
     C: Component<Mutability = Mutable>,
@@ -67,6 +70,12 @@ where
 
         if let Ok(mut current_component) = component_q.get_mut(local_entity) {
             *current_component = component;
+            debug!(
+                "updated component {} in {:?} at {:?}",
+                std::any::type_name::<C>(),
+                instance,
+                time.current_tick(),
+            );
         } else {
             commands.entity(local_entity).insert(component);
         }

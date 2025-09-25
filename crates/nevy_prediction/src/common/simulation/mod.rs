@@ -159,16 +159,6 @@ where
     // Save the current generic time to replace it after overwriting it with `SimulationTime`.
     let old_time = world.resource::<Time>().clone();
 
-    if let SimulationInstance::ClientPrediction = world.resource::<SimulationInstance>() {
-        let time = world.resource::<Time<SimulationTime>>();
-
-        debug!(
-            "executing {:?} to {:?}",
-            time.context().current_tick,
-            time.context().target_tick
-        );
-    }
-
     loop {
         let simulation_time = world.resource::<Time<SimulationTime>>();
 
@@ -181,12 +171,6 @@ where
 
         // `SimulationTime` contains the timestamp of the *next* update, so we advance it after executing `SimulationUpdate`.
         world.resource_mut::<Time<SimulationTime>>().step::<S>();
-
-        if let SimulationInstance::ClientPrediction = world.resource::<SimulationInstance>() {
-            let time = world.resource::<Time<SimulationTime>>();
-
-            debug!("executed {:?}", time.context().current_tick);
-        }
     }
 
     *world.resource_mut::<Time>() = old_time;
@@ -263,7 +247,7 @@ where
 {
     instance: Res<'w, SimulationInstance>,
     updates: ResMut<'w, UpdateExecutionQueue<T>>,
-    time: ResMut<'w, Time<SimulationTime>>,
+    time: Res<'w, Time<SimulationTime>>,
 }
 
 impl<'w, T> ReadyUpdates<'w, T>
