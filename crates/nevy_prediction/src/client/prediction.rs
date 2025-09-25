@@ -119,8 +119,6 @@ fn run_prediction_world(world: &mut World) {
                     .clear_target();
 
                 prediction_world.state = PredictionWorldState::Running;
-
-                debug!("Started prediction app")
             }
             PredictionWorldState::Running => {
                 let current_tick = prediction_world
@@ -138,8 +136,6 @@ fn run_prediction_world(world: &mut World) {
                 let desired_ticks = desired_tick.saturating_sub(*current_tick);
                 let execute_ticks = desired_ticks.min(budget.prediction);
 
-                debug!("Running prediction app for {} ticks", execute_ticks);
-
                 budget.prediction -= execute_ticks;
                 prediction_world.run(execute_ticks);
 
@@ -148,8 +144,6 @@ fn run_prediction_world(world: &mut World) {
                         .resource::<Time<SimulationTime>>()
                         .current_tick()
                 {
-                    debug!("Finished prediction and extracting");
-
                     prediction_world.extract(world);
                     prediction_world.state = PredictionWorldState::Idle;
                 }
@@ -207,11 +201,6 @@ fn queue_prediction_updates<T>(
     for update in prediction_updates.iter() {
         if update.tick == time.current_tick() {
             queue.insert(update.clone());
-
-            debug!(
-                "queued an update {} for prediction",
-                std::any::type_name::<T>()
-            );
         }
     }
 }
