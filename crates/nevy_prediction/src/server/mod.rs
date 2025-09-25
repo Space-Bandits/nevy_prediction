@@ -22,6 +22,10 @@ pub mod prelude {
             ServerWorldUpdate,
             simulation::{
                 SimulationTime, SimulationTimeExt, UpdateExecutionQueue, WorldUpdate,
+                schedules::{
+                    ExtractSimulation, SimulationPostUpdate, SimulationPreUpdate,
+                    SimulationStartup, SimulationUpdate,
+                },
                 simulation_entity::{SimulationEntity, SimulationEntityMap},
                 update_component::UpdateComponent,
             },

@@ -22,7 +22,10 @@ pub mod prelude {
             extract_component::ExtractSimulationComponentPlugin,
             extract_relation::ExtractSimulationRelationPlugin,
             extract_resource::ExtractSimulationResourcePlugin,
-            schedules::{ExtractSimulation, SimulationStartup, SimulationUpdate},
+            schedules::{
+                ExtractSimulation, SimulationPostUpdate, SimulationPreUpdate, SimulationStartup,
+                SimulationUpdate,
+            },
             simulation_entity::{
                 DespawnSimulationEntities, DespawnSimulatonEntity, SimulationEntity,
                 SimulationEntityMap,
