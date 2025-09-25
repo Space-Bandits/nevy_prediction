@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, time::Duration};
+use std::{marker::PhantomData, ops::DerefMut};
 
 use bevy::{
     ecs::{intern::Interned, schedule::ScheduleLabel},
@@ -6,13 +6,16 @@ use bevy::{
 };
 
 use crate::{
-    client::{ClientSimulationSystems, parallel_app::ParallelWorld, server_world::ServerWorld},
+    client::{
+        ClientSimulationSystems, PredictionBudget, simulation_world::SimulationWorld,
+        template_world::TemplateWorld,
+    },
     common::{
-        prelude::{ExtractSimulation, SourceWorld},
         scheme::PredictionScheme,
         simulation::{
-            SimulationInstance, SimulationPlugin, SimulationStartup, SimulationTime,
-            SimulationTimeExt, UpdateExecutionQueue, WorldUpdateQueue,
+            PrivateSimulationTimeExt, SimulationInstance, SimulationPlugin, SimulationTick,
+            SimulationTime, SimulationTimeExt, UpdateExecutionQueue, WorldUpdateQueue,
+            schedules::{SimulationPreUpdate, SimulationStartupMain},
         },
     },
 };
@@ -21,23 +24,12 @@ pub(crate) fn build<S>(app: &mut App, schedule: Interned<dyn ScheduleLabel>)
 where
     S: PredictionScheme,
 {
-    app.insert_non_send_resource(PredictionWorld::new::<S>());
+    app.insert_resource(PredictionWorld::new::<S>());
+    app.init_resource::<LastPredictedTick>();
 
     app.add_systems(
         schedule,
-        (
-            poll_prediction_world.in_set(ClientSimulationSystems::PollParallelAppsSystems),
-            (
-                set_prediction_target,
-                extract_predicton_world,
-                extract_server_world,
-            )
-                .chain()
-                .in_set(ClientSimulationSystems::ExtractSimulationsSystems),
-            set_prediction_wrold_extracted
-                .after(ClientSimulationSystems::ReapplyNewWorldUpdatesSystems),
-            run_prediction_app.in_set(ClientSimulationSystems::RunParallelAppsSystems),
-        ),
+        run_prediction_world.in_set(ClientSimulationSystems::RunPredictionWorld),
     );
 }
 
@@ -45,30 +37,35 @@ pub(crate) fn build_update<T>(app: &mut App, schedule: Interned<dyn ScheduleLabe
 where
     T: Send + Sync + 'static + Clone,
 {
-    app.init_resource::<PredictionUpdates<T>>();
+    let mut prediction_world = app.world_mut().resource_mut::<PredictionWorld>();
+
+    prediction_world.init_resource::<PredictionUpdates<T>>();
+    prediction_world
+        .resource_mut::<Schedules>()
+        .add_systems(SimulationPreUpdate, queue_prediction_updates::<T>);
 
     app.add_systems(
         schedule,
-        (
-            reapply_new_world_updates::<T>
-                .in_set(ClientSimulationSystems::ReapplyNewWorldUpdatesSystems),
-            (drain_prediction_updates::<T>, queue_prediction_updates::<T>)
-                .in_set(ClientSimulationSystems::QueuePredictionAppUpdatesSystems),
-        ),
+        drain_prediction_updates::<T>.in_set(ClientSimulationSystems::QueuePredictionUpdates),
     );
 }
 
-/// Controls how far prediction is run.
+/// The last tick that the prediction world predicted from.
 #[derive(Resource, Default, Deref, DerefMut)]
-pub struct PredictionInterval(pub Duration);
+struct LastPredictedTick(SimulationTick);
 
 /// Contains the [`ParallelWorld`] used for prediction.
+#[derive(Resource, Deref, DerefMut)]
 pub(crate) struct PredictionWorld {
-    pub world: ParallelWorld,
-    /// whether the finished predicted world has been extracted into the main app.
-    pub extracted: bool,
-    /// Whether the prediction app will be run this tick.
-    pub prediction_needed: bool,
+    #[deref]
+    pub world: SimulationWorld,
+    state: PredictionWorldState,
+}
+
+#[derive(Clone, Copy)]
+enum PredictionWorldState {
+    Idle,
+    Running,
 }
 
 impl PredictionWorld {
@@ -87,142 +84,85 @@ impl PredictionWorld {
             instance: SimulationInstance::ClientPrediction,
         });
 
-        app.world_mut().run_schedule(SimulationStartup);
+        app.world_mut().run_schedule(SimulationStartupMain);
 
         PredictionWorld {
-            world: ParallelWorld::new(app),
-            extracted: true,
-            prediction_needed: false,
+            world: SimulationWorld::build(app),
+            state: PredictionWorldState::Idle,
         }
     }
 }
 
-fn poll_prediction_world(mut prediction_world: NonSendMut<PredictionWorld>) {
-    prediction_world.world.poll();
-}
+fn run_prediction_world(world: &mut World) {
+    let mut prediction_world = world.remove_resource::<PredictionWorld>().unwrap();
 
-fn set_prediction_target(
-    simulation_time: Res<Time<SimulationTime>>,
-    mut prediction_world_state: NonSendMut<PredictionWorld>,
-) {
-    let Some(prediction_world) = prediction_world_state.world.get() else {
-        return;
-    };
+    loop {
+        match prediction_world.state {
+            PredictionWorldState::Idle => {
+                let current_template_tick = world
+                    .resource::<TemplateWorld>()
+                    .resource::<Time<SimulationTime>>()
+                    .current_tick();
 
-    let mut prediction_time = prediction_world.resource_mut::<Time<SimulationTime>>();
+                let last_predicted_tick = **world.resource::<LastPredictedTick>();
 
-    let prediction_target = simulation_time.context().target;
+                if current_template_tick == last_predicted_tick {
+                    break;
+                }
 
-    if prediction_target > prediction_time.context().target {
-        prediction_time.context_mut().target = prediction_target;
-        prediction_world_state.prediction_needed = true;
-    }
-}
+                world
+                    .resource_mut::<TemplateWorld>()
+                    .extract(prediction_world.deref_mut());
 
-fn extract_predicton_world(world: &mut World, mut scratch_world: Local<Option<World>>) -> Result {
-    let mut prediction_world_state = world
-        .remove_non_send_resource::<PredictionWorld>()
-        .ok_or("Prediction world should exist")?;
+                prediction_world
+                    .resource_mut::<Time<SimulationTime>>()
+                    .clear_target();
 
-    if prediction_world_state.extracted {
-        world.insert_non_send_resource(prediction_world_state);
-        return Ok(());
-    }
+                prediction_world.state = PredictionWorldState::Running;
 
-    let Some(prediction_world) = prediction_world_state.world.get() else {
-        world.insert_non_send_resource(prediction_world_state);
-        return Ok(());
-    };
+                debug!("Started prediction app")
+            }
+            PredictionWorldState::Running => {
+                let current_tick = prediction_world
+                    .resource::<Time<SimulationTime>>()
+                    .current_tick();
+                let desired_tick = world.resource::<Time<SimulationTime>>().current_tick();
 
-    let mut owned_prediction_world = scratch_world.take().unwrap_or_default();
-    std::mem::swap(&mut owned_prediction_world, prediction_world);
+                let mut budget = world.resource_mut::<PredictionBudget>();
 
-    // Extract the simulation time from the source world.
-    owned_prediction_world
-        .resource::<Time<SimulationTime>>()
-        .extract_time(world.resource_mut::<Time<SimulationTime>>().as_mut());
+                if budget.prediction == 0 {
+                    // not enough prediction budget
+                    break;
+                }
 
-    // Insert server world and run extract schedule.
-    world.insert_resource(SourceWorld(owned_prediction_world));
-    world.run_schedule(ExtractSimulation);
-    let SourceWorld(mut owned_prediction_world) = world
-        .remove_resource()
-        .ok_or("Extract schedule removed the `SourceWorld`")?;
+                let desired_ticks = desired_tick.saturating_sub(*current_tick);
+                let execute_ticks = desired_ticks.min(budget.prediction);
 
-    // Swap world back and replace scratch world.
-    std::mem::swap(&mut owned_prediction_world, prediction_world);
-    *scratch_world = Some(owned_prediction_world);
+                debug!("Running prediction app for {} ticks", execute_ticks);
 
-    world.insert_non_send_resource(prediction_world_state);
+                budget.prediction -= execute_ticks;
+                prediction_world.run(execute_ticks);
 
-    Ok(())
-}
+                if desired_tick
+                    == prediction_world
+                        .resource::<Time<SimulationTime>>()
+                        .current_tick()
+                {
+                    debug!("Finished prediction and extracting");
 
-fn set_prediction_wrold_extracted(mut prediction_world: NonSendMut<PredictionWorld>) {
-    if prediction_world.world.get().is_none() {
-        return;
+                    prediction_world.extract(world);
+                    prediction_world.state = PredictionWorldState::Idle;
+                }
+            }
+        }
     }
 
-    prediction_world.extracted = true;
-}
-
-fn extract_server_world(
-    mut server_world_state: NonSendMut<ServerWorld>,
-    mut prediction_world_state: NonSendMut<PredictionWorld>,
-    mut scratch_world: Local<Option<World>>,
-) -> Result {
-    if !prediction_world_state.prediction_needed {
-        return Ok(());
-    }
-
-    // Check that both the server world app and prediction app are idle.
-    let Some(server_world_app) = server_world_state.get() else {
-        return Ok(());
-    };
-
-    let Some(prediction_app) = prediction_world_state.world.get() else {
-        return Ok(());
-    };
-
-    // Swap server world with scratch world.
-    let mut owned_server_world = scratch_world.take().unwrap_or_default();
-    std::mem::swap(&mut owned_server_world, server_world_app);
-
-    // Extract the simulation time from the source world.
-    owned_server_world
-        .resource::<Time<SimulationTime>>()
-        .extract_time(
-            prediction_app
-                .resource_mut::<Time<SimulationTime>>()
-                .as_mut(),
-        );
-
-    // Insert server world and run extract schedule.
-    prediction_app.insert_resource(SourceWorld(owned_server_world));
-    prediction_app.run_schedule(ExtractSimulation);
-    let SourceWorld(mut owned_server_world) = prediction_app
-        .remove_resource()
-        .ok_or("Extract schedule removed the `SourceWorld`")?;
-
-    // Swap server world back and replace scratch world.
-    std::mem::swap(&mut owned_server_world, server_world_app);
-    *scratch_world = Some(owned_server_world);
-
-    Ok(())
-}
-
-fn run_prediction_app(mut prediction_app: NonSendMut<PredictionWorld>) {
-    if !prediction_app.prediction_needed {
-        return;
-    }
-
-    prediction_app.world.update(true);
-    prediction_app.extracted = false;
+    world.insert_resource(prediction_world);
 }
 
 /// Contains a sorted list of world updates that haven't been reconciled with the server.
 ///
-/// These updates get added to the update queue of the prediction app before it is run.
+/// This resource is inserted into the [`PredictionWorld`] and updates of the matching frame add added to the [`UpdateExecutionQueue`] every update.
 #[derive(Resource, Deref, DerefMut)]
 pub(crate) struct PredictionUpdates<T>(WorldUpdateQueue<T>);
 
@@ -234,21 +174,19 @@ impl<T> Default for PredictionUpdates<T> {
 
 /// Removes prediction updates that have been reconciled
 fn drain_prediction_updates<T>(
-    mut updates: ResMut<PredictionUpdates<T>>,
-    mut prediction_world: NonSendMut<PredictionWorld>,
+    mut prediction_world: ResMut<PredictionWorld>,
+    template_world: ResMut<TemplateWorld>,
 ) where
     T: Send + Sync + 'static,
 {
-    let Some(prediction_world) = prediction_world.world.get() else {
-        return;
-    };
+    let mut updates = prediction_world.resource_mut::<PredictionUpdates<T>>();
 
-    let reconciled_time = prediction_world
+    let reconciled_tick = template_world
         .resource::<Time<SimulationTime>>()
-        .elapsed();
+        .current_tick();
 
     while let Some(front) = updates.front() {
-        if front.time < reconciled_time {
+        if front.tick < reconciled_tick {
             updates.pop_front();
         } else {
             break;
@@ -256,48 +194,49 @@ fn drain_prediction_updates<T>(
     }
 }
 
+/// Runs in [`SimulationPreUpdate`] on the prediction app.
+///
+/// Queues any updates that should happen this tick on the prediction app.
 fn queue_prediction_updates<T>(
     prediction_updates: Res<PredictionUpdates<T>>,
-    mut prediction_world: NonSendMut<PredictionWorld>,
+    mut queue: ResMut<UpdateExecutionQueue<T>>,
+    time: Res<Time<SimulationTime>>,
 ) where
     T: Send + Sync + 'static + Clone,
 {
-    if !prediction_world.prediction_needed {
-        return;
-    }
-
-    let Some(world) = prediction_world.world.get() else {
-        return;
-    };
-
-    let mut queue = world.resource_mut::<UpdateExecutionQueue<T>>();
-
-    for update in prediction_updates.iter().cloned() {
-        queue.insert(update);
-    }
-}
-
-/// When the prediction world finishes, it will not contain any predicted world upates that were added while it was running.
-/// This system adds any updates that are newer than it's current simulation time, which will then be "predicted" on the main app.
-fn reapply_new_world_updates<T>(
-    mut prediction_world: NonSendMut<PredictionWorld>,
-    predicted_time: Res<Time<SimulationTime>>,
-    prediction_updates: Res<PredictionUpdates<T>>,
-    mut prediction_queue: ResMut<UpdateExecutionQueue<T>>,
-) where
-    T: Send + Sync + 'static + Clone,
-{
-    if prediction_world.extracted {
-        return;
-    }
-
-    if prediction_world.world.get().is_none() {
-        return;
-    };
-
     for update in prediction_updates.iter() {
-        if update.time >= predicted_time.elapsed() {
-            prediction_queue.insert(update.clone());
+        if update.tick == time.current_tick() {
+            queue.insert(update.clone());
+
+            debug!(
+                "queued an update {} for prediction",
+                std::any::type_name::<T>()
+            );
         }
     }
 }
+
+// /// When the prediction world finishes, it will not contain any predicted world upates that were added while it was running.
+// /// This system adds any updates that are newer than it's current simulation time, which will then be "predicted" on the main app.
+// fn reapply_new_world_updates<T>(
+//     mut prediction_world: ResMut<PredictionWorld>,
+//     predicted_time: Res<Time<SimulationTime>>,
+//     prediction_updates: Res<PredictionUpdates<T>>,
+//     mut prediction_queue: ResMut<UpdateExecutionQueue<T>>,
+// ) where
+//     T: Send + Sync + 'static + Clone,
+// {
+//     if prediction_world.extracted {
+//         return;
+//     }
+
+//     if prediction_world.world.get().is_none() {
+//         return;
+//     };
+
+//     for update in prediction_updates.iter() {
+//         if update.time >= predicted_time.elapsed() {
+//             prediction_queue.insert(update.clone());
+//         }
+//     }
+// }

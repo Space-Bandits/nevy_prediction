@@ -3,7 +3,8 @@ use std::marker::PhantomData;
 use bevy::{ecs::relationship::Relationship, prelude::*};
 
 use crate::common::simulation::{
-    ExtractSimulation, ExtractSimulationSystems, SourceWorld,
+    ExtractSimulationSystems, SourceWorld,
+    schedules::ExtractSimulation,
     simulation_entity::{SimulationEntity, SimulationEntityMap},
 };
 

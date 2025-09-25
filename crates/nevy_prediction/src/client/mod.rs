@@ -8,31 +8,35 @@ use nevy::*;
 
 use crate::{
     client::{
-        prediction::{PredictionInterval, PredictionUpdates, PredictionWorld},
-        server_world::ServerWorld,
+        prediction::{PredictionUpdates, PredictionWorld},
+        template_world::{ServerTickSamples, TemplateWorld},
     },
     common::{
         ResetClientSimulation,
         scheme::PredictionScheme,
         simulation::{
-            ResetSimulation, SimulationInstance, SimulationPlugin, SimulationTime,
-            StepSimulationSystems, WorldUpdate,
+            PrivateSimulationTimeExt, SimulationInstance, SimulationPlugin, SimulationTick,
+            SimulationTime, StepSimulationSystems, WorldUpdate, schedules::ResetSimulation,
         },
     },
-    server::prelude::UpdateExecutionQueue,
+    server::prelude::{SimulationTimeExt, UpdateExecutionQueue},
 };
 
-pub(crate) mod parallel_app;
 pub mod prediction;
-pub(crate) mod server_world;
+pub(crate) mod simulation_world;
+pub(crate) mod template_world;
 
 pub mod prelude {
     pub use crate::client::{
-        ClientSimulationSystems, NevyPredictionClientPlugin, PredictionServerConnection,
-        PredictionUpdateCreator, prediction::PredictionInterval,
+        ClientSimulationSystems, NevyPredictionClientPlugin, PredictionInterval, PredictionRates,
+        PredictionServerConnection, PredictionUpdateCreator,
     };
     pub use crate::common::simulation::{
-        SimulationTime, SimulationUpdate, StepSimulationSystems, WorldUpdate,
+        SimulationTime, StepSimulationSystems, WorldUpdate,
+        schedules::{
+            ExtractSimulation, SimulationPostUpdate, SimulationPreUpdate, SimulationStartup,
+            SimulationUpdate,
+        },
         simulation_entity::{SimulationEntity, SimulationEntityMap},
         update_component::UpdateComponent,
     };
@@ -40,23 +44,16 @@ pub mod prelude {
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ClientSimulationSystems {
-    /// Parallel apps are polled for completion.
-    PollParallelAppsSystems,
-    /// Simulations get reset by the server.
-    ResetSimulationSystems,
+    /// Runs first, where the [`ResetSimulation`] schedule is run if needed.
+    ResetSimulation,
     /// Simulation time updates are received by the server.
-    ReceiveTimeSystems,
-    /// The prediction app is extracted into the main world
-    /// The server world app is extracted into the prediction app
-    ExtractSimulationsSystems,
-    /// Reapply world updates that have been added while the prediction world was running
-    ReapplyNewWorldUpdatesSystems,
+    ReceiveTime,
     /// User queues world updates.
-    QueueUpdatesSystems,
-    /// Predicted updates are queued to the prediction world.
-    QueuePredictionAppUpdatesSystems,
-    /// Prediction apps are run.
-    RunParallelAppsSystems,
+    QueueUpdates,
+    RunTemplateWorld,
+    /// Any updates than should be included in prediction are queued.
+    QueuePredictionUpdates,
+    RunPredictionWorld,
 }
 
 /// Used to add systems when building a world update
@@ -84,24 +81,25 @@ where
     fn build(&self, app: &mut App) {
         app.insert_resource(ClientPredictionSchedule(self.schedule));
 
+        app.init_resource::<PredictionRates>();
+        app.init_resource::<PredictionBudget>();
+
         app.configure_sets(
             self.schedule,
             (
-                ClientSimulationSystems::PollParallelAppsSystems,
-                ClientSimulationSystems::ResetSimulationSystems,
-                ClientSimulationSystems::ReceiveTimeSystems,
-                ClientSimulationSystems::ExtractSimulationsSystems,
-                ClientSimulationSystems::ReapplyNewWorldUpdatesSystems,
-                ClientSimulationSystems::QueueUpdatesSystems,
-                ClientSimulationSystems::QueuePredictionAppUpdatesSystems,
-                ClientSimulationSystems::RunParallelAppsSystems,
+                ClientSimulationSystems::ResetSimulation,
+                ClientSimulationSystems::ReceiveTime,
+                ClientSimulationSystems::QueueUpdates,
+                StepSimulationSystems,
+                ClientSimulationSystems::RunTemplateWorld,
+                ClientSimulationSystems::QueuePredictionUpdates,
+                ClientSimulationSystems::RunPredictionWorld,
             )
-                .chain()
-                .before(StepSimulationSystems),
+                .chain(),
         );
 
         crate::common::build::<S>(app);
-        server_world::build::<S>(app, self.schedule);
+        template_world::build::<S>(app, self.schedule);
         prediction::build::<S>(app, self.schedule);
 
         app.add_plugins(SimulationPlugin::<S> {
@@ -114,9 +112,9 @@ where
             self.schedule,
             (
                 receive_reset_simulations
-                    .pipe(reset_simulations)
-                    .in_set(ClientSimulationSystems::ResetSimulationSystems),
-                drive_simulation_time.in_set(ClientSimulationSystems::ReceiveTimeSystems),
+                    .pipe(reset_simulations::<S>)
+                    .in_set(ClientSimulationSystems::ResetSimulation),
+                drive_simulation_time::<S>.in_set(ClientSimulationSystems::ReceiveTime),
             ),
         );
 
@@ -133,16 +131,83 @@ where
 {
     let schedule = **app.world().resource::<ClientPredictionSchedule>();
 
-    server_world::build_update::<T>(app, schedule);
+    template_world::build_update::<T>(app, schedule);
     prediction::build_update::<T>(app, schedule);
 }
+
+/// Controls how many updates prediction logic is allowed to relative to the main app.
+///
+/// These values should be greater than one to allow prediction logic to catch up,
+/// but if they are too high, too many updates may run in a single frame which cause hitching.
+#[derive(Resource)]
+pub struct PredictionRates {
+    pub template: f32,
+    pub prediction: f32,
+}
+
+impl Default for PredictionRates {
+    fn default() -> Self {
+        PredictionRates {
+            template: 3.,
+            prediction: 5.,
+        }
+    }
+}
+
+/// Controls how many updates the template and prediction worlds are allowed to execute.
+#[derive(Resource, Default)]
+struct PredictionBudget {
+    pub template: u32,
+    pub prediction: u32,
+
+    template_overstep: f32,
+    prediction_overstep: f32,
+}
+
+/// Controls how far prediction is run.
+#[derive(Resource, Default, Deref, DerefMut)]
+pub struct PredictionInterval(pub Duration);
 
 /// Marker component that must be inserted onto the server connection entity for prediction.
 #[derive(Component)]
 pub struct PredictionServerConnection;
 
-fn drive_simulation_time(mut time: ResMut<Time<SimulationTime>>, real_time: Res<Time<Real>>) {
-    time.context_mut().target += real_time.delta();
+fn drive_simulation_time<S>(
+    server_time: Res<ServerTickSamples>,
+    interval: Res<PredictionInterval>,
+    mut time: ResMut<Time<SimulationTime>>,
+    real_time: Res<Time<Real>>,
+    rates: Res<PredictionRates>,
+    mut budget: ResMut<PredictionBudget>,
+) where
+    S: PredictionScheme,
+{
+    loop {
+        let target_time = server_time.estimated_time::<S>(real_time.elapsed()) + **interval;
+        let current_time = time.target_tick().time::<S>();
+
+        if current_time + S::step_interval() > target_time {
+            break;
+        }
+
+        time.queue_ticks(1);
+
+        budget.template_overstep += rates.template;
+        budget.prediction_overstep += rates.prediction;
+    }
+
+    budget.template = 0;
+    budget.prediction = 0;
+
+    while budget.template_overstep > 1. {
+        budget.template_overstep -= 1.;
+        budget.template += 1;
+    }
+
+    while budget.prediction_overstep > 1. {
+        budget.prediction_overstep -= 1.;
+        budget.prediction += 1;
+    }
 }
 
 fn receive_reset_simulations(
@@ -151,11 +216,14 @@ fn receive_reset_simulations(
         &mut ReceivedMessages<ResetClientSimulation>,
         Has<PredictionServerConnection>,
     )>,
-) -> Option<Duration> {
+) -> Option<SimulationTick> {
     let mut reset = None;
 
     for (connection_entity, mut messages, is_server) in &mut message_q {
-        for ResetClientSimulation { simulation_time } in messages.drain() {
+        for ResetClientSimulation {
+            simulation_tick: simulation_time,
+        } in messages.drain()
+        {
             if !is_server {
                 warn!(
                     "Received a prediction message from a connection that isn't the server: {}",
@@ -172,28 +240,31 @@ fn receive_reset_simulations(
     reset
 }
 
-fn reset_simulations(In(reset): In<Option<Duration>>, world: &mut World) {
-    let Some(elapsed) = reset else {
+fn reset_simulations<S>(In(reset_tick): In<Option<SimulationTick>>, world: &mut World)
+where
+    S: PredictionScheme,
+{
+    let Some(reset_tick) = reset_tick else {
         return;
     };
 
-    debug!("resetting simulation to {:?}", elapsed);
+    debug!("resetting simulation to {:?}", reset_tick);
 
-    world.non_send_resource_mut::<ServerWorld>().reset(elapsed);
+    world.resource_mut::<TemplateWorld>().reset::<S>(reset_tick);
+
     world
-        .non_send_resource_mut::<PredictionWorld>()
-        .world
-        .reset(elapsed);
+        .resource_mut::<PredictionWorld>()
+        .reset::<S>(reset_tick);
 
-    let prediction_interval = **world.resource::<PredictionInterval>();
-
-    let mut time = Time::new_with(SimulationTime {
-        target: elapsed + prediction_interval,
-    });
-    time.advance_to(elapsed + prediction_interval);
-    world.insert_resource(time);
-
+    world.insert_resource(Time::<SimulationTime>::from_tick::<S>(reset_tick));
     world.run_schedule(ResetSimulation);
+
+    world.init_resource::<PredictionBudget>();
+
+    let real_time = world.resource::<Time<Real>>().elapsed();
+    world
+        .resource_mut::<ServerTickSamples>()
+        .reset::<S>(real_time, reset_tick);
 }
 
 #[derive(SystemParam)]
@@ -203,7 +274,7 @@ where
 {
     time: Res<'w, Time<SimulationTime>>,
     simulation_queue: ResMut<'w, UpdateExecutionQueue<T>>,
-    prediction_updates: ResMut<'w, PredictionUpdates<T>>,
+    prediction_world: ResMut<'w, PredictionWorld>,
 }
 
 impl<'w, T> PredictionUpdateCreator<'w, T>
@@ -221,12 +292,14 @@ where
     /// then all that needs to be communicated is the timestamp of the returned update.
     pub fn create(&mut self, update: T) -> WorldUpdate<T> {
         let update = WorldUpdate {
-            time: self.time.elapsed(),
+            tick: self.time.current_tick(),
             update,
         };
 
         self.simulation_queue.insert(update.clone());
-        self.prediction_updates.push_back(update.clone());
+        self.prediction_world
+            .resource_mut::<PredictionUpdates<T>>()
+            .push_back(update.clone());
 
         update
     }
