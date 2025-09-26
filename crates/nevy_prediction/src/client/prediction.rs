@@ -46,7 +46,7 @@ where
 
     app.add_systems(
         schedule,
-        drain_prediction_updates::<T>.in_set(ClientSimulationSystems::QueuePredictionUpdates),
+        drain_prediction_updates::<T>.in_set(ClientSimulationSystems::DrainPredictionUpdates),
     );
 }
 
@@ -204,28 +204,3 @@ fn queue_prediction_updates<T>(
         }
     }
 }
-
-// /// When the prediction world finishes, it will not contain any predicted world upates that were added while it was running.
-// /// This system adds any updates that are newer than it's current simulation time, which will then be "predicted" on the main app.
-// fn reapply_new_world_updates<T>(
-//     mut prediction_world: ResMut<PredictionWorld>,
-//     predicted_time: Res<Time<SimulationTime>>,
-//     prediction_updates: Res<PredictionUpdates<T>>,
-//     mut prediction_queue: ResMut<UpdateExecutionQueue<T>>,
-// ) where
-//     T: Send + Sync + 'static + Clone,
-// {
-//     if prediction_world.extracted {
-//         return;
-//     }
-
-//     if prediction_world.world.get().is_none() {
-//         return;
-//     };
-
-//     for update in prediction_updates.iter() {
-//         if update.time >= predicted_time.elapsed() {
-//             prediction_queue.insert(update.clone());
-//         }
-//     }
-// }

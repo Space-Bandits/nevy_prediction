@@ -51,6 +51,7 @@ pub enum ClientSimulationSystems {
     /// User queues world updates.
     QueueUpdates,
     RunTemplateWorld,
+    DrainPredictionUpdates,
     /// Any updates than should be included in prediction are queued.
     QueuePredictionUpdates,
     RunPredictionWorld,
@@ -92,6 +93,7 @@ where
                 ClientSimulationSystems::QueueUpdates,
                 StepSimulationSystems,
                 ClientSimulationSystems::RunTemplateWorld,
+                ClientSimulationSystems::DrainPredictionUpdates,
                 ClientSimulationSystems::QueuePredictionUpdates,
                 ClientSimulationSystems::RunPredictionWorld,
             )

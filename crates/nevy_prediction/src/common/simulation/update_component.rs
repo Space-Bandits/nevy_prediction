@@ -4,6 +4,7 @@ use bevy::{ecs::component::Mutable, prelude::*};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use crate::common::{
+    prelude::ExtractSimulationResourcePlugin,
     scheme::AddWorldUpdate,
     simulation::{
         ReadyUpdates,
@@ -37,7 +38,20 @@ where
             SimulationUpdate,
             update_component::<C>.in_set(UpdateComponentSystems),
         );
+
+        app.add_plugins(ExtractSimulationResourcePlugin::<UpdateComponentCount<C>>::default());
+        app.insert_resource(UpdateComponentCount::<C> {
+            _p: PhantomData,
+            count: 0,
+        });
     }
+}
+
+#[derive(Resource, Deref, DerefMut, Clone)]
+pub struct UpdateComponentCount<C> {
+    _p: PhantomData<C>,
+    #[deref]
+    pub count: u32,
 }
 
 /// This is a world updated added by [`UpdateComponentPlugin<C>`].
@@ -54,6 +68,7 @@ fn update_component<C>(
     mut commands: Commands,
     map: Res<SimulationEntityMap>,
     mut component_q: Query<&mut C>,
+    mut count: ResMut<UpdateComponentCount<C>>,
 ) -> Result
 where
     C: Component<Mutability = Mutable>,
@@ -73,6 +88,8 @@ where
         } else {
             commands.entity(local_entity).insert(component);
         }
+
+        **count += 1;
     }
 
     Ok(())
