@@ -41,7 +41,6 @@ pub mod prelude {
 pub enum ServerSimulationSystems {
     SendResets,
     QueueUpdates,
-    RunSimulation,
 }
 
 pub struct NevyPredictionServerPlugin<S> {
@@ -79,14 +78,11 @@ where
         app.configure_sets(
             self.schedule,
             (
-                (
-                    ServerSimulationSystems::SendResets,
-                    ServerSimulationSystems::QueueUpdates,
-                    ServerSimulationSystems::RunSimulation,
-                )
-                    .chain(),
-                StepSimulationSystems.in_set(ServerSimulationSystems::RunSimulation),
-            ),
+                ServerSimulationSystems::SendResets,
+                ServerSimulationSystems::QueueUpdates,
+                StepSimulationSystems,
+            )
+                .chain(),
         );
 
         app.add_plugins(SimulationPlugin::<S> {

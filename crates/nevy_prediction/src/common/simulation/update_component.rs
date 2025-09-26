@@ -59,11 +59,14 @@ where
     C: Component<Mutability = Mutable>,
 {
     for UpdateComponent { entity, component } in updates.drain() {
-        let local_entity = map.get(entity).ok_or(format!(
-            "Simulation entity {:?} did not exist locally when attemptiny to update \"{}\"",
-            entity,
-            std::any::type_name::<C>()
-        ))?;
+        let Some(local_entity) = map.get(entity) else {
+            warn!(
+                "Simulation entity {:?} did not exist locally when attempting to update \"{}\"",
+                entity,
+                std::any::type_name::<C>()
+            );
+            continue;
+        };
 
         if let Ok(mut current_component) = component_q.get_mut(local_entity) {
             *current_component = component;
