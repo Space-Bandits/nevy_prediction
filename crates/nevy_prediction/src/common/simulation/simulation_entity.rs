@@ -124,7 +124,6 @@ fn mark_removed_simulation_entities(
     entity_q: Query<Entity, With<SimulationEntity>>,
 ) {
     for entity in &entity_q {
-        debug!("Inserting marker onto {}", entity);
         commands.entity(entity).insert(RemovedSimulationEntity);
     }
 }
@@ -137,7 +136,7 @@ fn mark_removed_simulation_entities(
 fn extract_simulation_entities(
     mut commands: Commands,
     map: Res<SimulationEntityMap>,
-    local_entity_q: Query<Option<&SimulationEntity>>,
+
     mut entity_q: Local<Option<QueryState<&SimulationEntity>>>,
     mut source_world: ResMut<SourceWorld>,
 ) {
@@ -145,13 +144,6 @@ fn extract_simulation_entities(
 
     for &simulation_entity in entity_q.iter(&*source_world) {
         if let Some(local_entity) = map.get(simulation_entity) {
-            let local_simulation_entity = local_entity_q.get(local_entity).unwrap();
-
-            debug!(
-                "Local entity {} has {:?}",
-                local_entity, local_simulation_entity
-            );
-
             commands
                 .entity(local_entity)
                 .remove::<RemovedSimulationEntity>();
@@ -167,7 +159,6 @@ fn despawn_removed_simulation_entities(
     entity_q: Query<(Entity, Option<&SimulationEntity>), With<RemovedSimulationEntity>>,
 ) {
     for (entity, simulation_entity) in &entity_q {
-        debug!("Extract despawned {} {:?}", entity, simulation_entity);
         commands.entity(entity).despawn();
     }
 }
