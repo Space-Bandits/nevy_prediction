@@ -22,19 +22,22 @@ pub fn build(app: &mut App) {
     app.add_systems(
         ExtractSimulation,
         (
-            mark_removed_simulation_entities,
-            extract_simulation_entities,
-            despawn_removed_simulation_entities,
-        )
-            .chain()
-            .in_set(ExtractSimulationSystems::ExtractEntities),
+            (
+                mark_removed_simulation_entities,
+                extract_simulation_entities,
+            )
+                .chain()
+                .in_set(ExtractSimulationSystems::ExtractEntities),
+            despawn_removed_simulation_entities
+                .in_set(ExtractSimulationSystems::DespawnSimulationEntities),
+        ),
     );
 
     app.add_systems(ResetSimulation, reset_simulation_entities);
 
     app.add_systems(
         SimulationUpdate,
-        despawn_simulation_entities.in_set(DespawnSimulationEntities),
+        apply_despawn_simulation_entities.in_set(DespawnSimulationEntities),
     );
 
     app.add_world_update::<DespawnSimulatonEntity>();
@@ -177,7 +180,7 @@ pub struct DespawnSimulatonEntity {
     pub entity: SimulationEntity,
 }
 
-fn despawn_simulation_entities(
+fn apply_despawn_simulation_entities(
     mut commands: Commands,
     mut updates: ReadyUpdates<DespawnSimulatonEntity>,
     map: Res<SimulationEntityMap>,

@@ -34,12 +34,15 @@ pub mod update_component;
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ExtractSimulationSystems {
+    /// Where new simulation entities are extracted.
     ExtractEntities,
-    /// Where components and relations added by
+    /// Where components added by
     /// [`ExtractSimulationComponentPlugin`](extract_component::ExtractSimulationComponentPlugin)
     /// and relations added by [`ExtractSimulationRelationPlugin`](extract_relation::ExtractSimulationRelationPlugin)
     /// are extracted.
     ExtractComponents,
+    /// Where simulation entities that no longer exist in the source world are despawned.
+    DespawnSimulationEntities,
 }
 
 /// Holds the source world during the [`ExtractSimulation`] schedule.
@@ -137,10 +140,6 @@ where
         );
 
         app.add_plugins(S::plugin());
-
-        // for update in S::updates().0 {
-        //     update.build_simulation(app);
-        // }
     }
 }
 
