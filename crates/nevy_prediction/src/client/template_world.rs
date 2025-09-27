@@ -14,6 +14,7 @@ use nevy::*;
 use crate::{
     client::{
         ClientSimulationSystems, PredictionBudget, PredictionServerConnection,
+        prediction::{PredictionUpdates, PredictionWorld},
         simulation_world::SimulationWorld,
     },
     common::{
@@ -85,14 +86,14 @@ fn receive_world_updates<T>(
         &mut ReceivedMessages<ServerWorldUpdate<T>>,
         Has<PredictionServerConnection>,
     )>,
-    // mut prediction_updates: ResMut<PredictionUpdates<T>>,
+    mut prediction_world: ResMut<PredictionWorld>,
 ) where
     T: Send + Sync + 'static + Clone,
 {
     for (connection_entity, mut messages, is_server) in &mut message_q {
         for ServerWorldUpdate {
             update,
-            include_in_prediction: _,
+            include_in_prediction,
         } in messages.drain()
         {
             if !is_server {
@@ -104,9 +105,11 @@ fn receive_world_updates<T>(
                 continue;
             }
 
-            // if include_in_prediction {
-            //     prediction_updates.insert(update.clone());
-            // }
+            if include_in_prediction {
+                let mut prediction_updates =
+                    prediction_world.resource_mut::<PredictionUpdates<T>>();
+                prediction_updates.insert(update.clone());
+            }
 
             server_world
                 .resource_mut::<UpdateExecutionQueue<T>>()
@@ -201,12 +204,19 @@ fn run_template_world(
 
     let desired_ticks = *desired_tick - *current_tick;
 
-    if desired_ticks == 0 {
+    let execute_ticks = desired_ticks.min(budget.template);
+
+    if execute_ticks == 0 {
         return;
     }
 
-    let execute_ticks = desired_ticks.min(budget.template);
     budget.template -= execute_ticks;
-
     template_world.run(execute_ticks);
+
+    debug!(
+        "advanced template world up to {:?}",
+        template_world
+            .resource::<Time<SimulationTime>>()
+            .current_tick()
+    );
 }

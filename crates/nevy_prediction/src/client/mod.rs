@@ -51,7 +51,6 @@ pub enum ClientSimulationSystems {
     /// User queues world updates.
     QueueUpdates,
     RunTemplateWorld,
-    DrainPredictionUpdates,
     /// Any updates than should be included in prediction are queued.
     QueuePredictionUpdates,
     RunPredictionWorld,
@@ -93,7 +92,6 @@ where
                 ClientSimulationSystems::QueueUpdates,
                 StepSimulationSystems,
                 ClientSimulationSystems::RunTemplateWorld,
-                ClientSimulationSystems::DrainPredictionUpdates,
                 ClientSimulationSystems::QueuePredictionUpdates,
                 ClientSimulationSystems::RunPredictionWorld,
             )
@@ -134,7 +132,7 @@ where
     let schedule = **app.world().resource::<ClientPredictionSchedule>();
 
     template_world::build_update::<T>(app, schedule);
-    prediction::build_update::<T>(app, schedule);
+    prediction::build_update::<T>(app);
 }
 
 /// Controls how many updates prediction logic is allowed to relative to the main app.

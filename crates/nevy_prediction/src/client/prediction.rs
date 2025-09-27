@@ -33,25 +33,23 @@ where
     );
 }
 
-pub(crate) fn build_update<T>(app: &mut App, schedule: Interned<dyn ScheduleLabel>)
+pub(crate) fn build_update<T>(app: &mut App)
 where
     T: Send + Sync + 'static + Clone,
 {
     let mut prediction_world = app.world_mut().resource_mut::<PredictionWorld>();
 
     prediction_world.init_resource::<PredictionUpdates<T>>();
-    prediction_world
-        .resource_mut::<Schedules>()
-        .add_systems(SimulationPreUpdate, queue_prediction_updates::<T>);
-
-    app.add_systems(
-        schedule,
-        drain_prediction_updates::<T>.in_set(ClientSimulationSystems::DrainPredictionUpdates),
+    prediction_world.resource_mut::<Schedules>().add_systems(
+        SimulationPreUpdate,
+        (drain_prediction_updates::<T>, queue_prediction_updates::<T>).chain(),
     );
 }
 
 /// The last tick that the prediction world predicted from.
-#[derive(Resource, Default, Deref, DerefMut)]
+///
+/// When prediction starts this resource is copied into the prediction world and holds which tick prediction started from.
+#[derive(Resource, Default, Clone, Deref, DerefMut)]
 struct LastPredictedTick(SimulationTick);
 
 /// Contains the [`ParallelWorld`] used for prediction.
@@ -104,11 +102,16 @@ fn run_prediction_world(world: &mut World) {
                     .resource::<Time<SimulationTime>>()
                     .current_tick();
 
-                let last_predicted_tick = **world.resource::<LastPredictedTick>();
+                let mut last_predicted_tick = world.resource_mut::<LastPredictedTick>();
 
-                if current_template_tick == last_predicted_tick {
+                if current_template_tick == **last_predicted_tick {
                     break;
                 }
+
+                // Start a prediction sequence.
+
+                **last_predicted_tick = current_template_tick;
+                prediction_world.insert_resource(last_predicted_tick.clone());
 
                 world
                     .resource_mut::<TemplateWorld>()
@@ -119,6 +122,13 @@ fn run_prediction_world(world: &mut World) {
                     .clear_target();
 
                 prediction_world.state = PredictionWorldState::Running;
+
+                debug!(
+                    "Started prediction at {:?}",
+                    prediction_world
+                        .resource::<Time<SimulationTime>>()
+                        .current_tick()
+                );
             }
             PredictionWorldState::Running => {
                 let current_tick = prediction_world
@@ -168,20 +178,19 @@ impl<T> Default for PredictionUpdates<T> {
 
 /// Removes prediction updates that have been reconciled
 fn drain_prediction_updates<T>(
-    mut prediction_world: ResMut<PredictionWorld>,
-    template_world: ResMut<TemplateWorld>,
+    mut prediction_updates: ResMut<PredictionUpdates<T>>,
+    prediction_tick: Res<LastPredictedTick>,
 ) where
     T: Send + Sync + 'static,
 {
-    let mut updates = prediction_world.resource_mut::<PredictionUpdates<T>>();
-
-    let reconciled_tick = template_world
-        .resource::<Time<SimulationTime>>()
-        .current_tick();
-
-    while let Some(front) = updates.front() {
-        if front.tick < reconciled_tick {
-            updates.pop_front();
+    while let Some(front) = prediction_updates.front() {
+        if front.tick < **prediction_tick {
+            debug!(
+                "dropped a prediction update {} for {:?}",
+                std::any::type_name::<T>(),
+                front.tick
+            );
+            prediction_updates.pop_front();
         } else {
             break;
         }
