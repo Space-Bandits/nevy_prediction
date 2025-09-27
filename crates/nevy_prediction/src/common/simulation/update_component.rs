@@ -4,10 +4,10 @@ use bevy::{ecs::component::Mutable, prelude::*};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use crate::common::{
-    prelude::ExtractSimulationResourcePlugin,
     scheme::AddWorldUpdate,
     simulation::{
         ReadyUpdates,
+        extract_resource::ExtractSimulationResourcePlugin,
         schedules::SimulationUpdate,
         simulation_entity::{SimulationEntity, SimulationEntityMap},
     },

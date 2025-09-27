@@ -16,27 +16,6 @@ use crate::common::{
     },
 };
 
-pub mod prelude {
-    pub use crate::{
-        common::{
-            ServerWorldUpdate,
-            simulation::{
-                SimulationTime, SimulationTimeExt, UpdateExecutionQueue, WorldUpdate,
-                schedules::{
-                    ExtractSimulation, SimulationPostUpdate, SimulationPreUpdate,
-                    SimulationStartup, SimulationUpdate,
-                },
-                simulation_entity::{SimulationEntity, SimulationEntityMap},
-                update_component::UpdateComponent,
-            },
-        },
-        server::{
-            NevyPredictionServerPlugin, PredictionClient, ServerSimulationSystems,
-            WorldUpdateSender,
-        },
-    };
-}
-
 #[derive(SystemSet, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ServerSimulationSystems {
     SendResets,

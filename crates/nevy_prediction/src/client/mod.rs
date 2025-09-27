@@ -16,31 +16,15 @@ use crate::{
         scheme::PredictionScheme,
         simulation::{
             PrivateSimulationTimeExt, SimulationInstance, SimulationPlugin, SimulationTick,
-            SimulationTime, StepSimulationSystems, WorldUpdate, schedules::ResetSimulation,
+            SimulationTime, SimulationTimeExt, StepSimulationSystems, UpdateExecutionQueue,
+            WorldUpdate, schedules::ResetSimulation,
         },
     },
-    server::prelude::{SimulationTimeExt, UpdateExecutionQueue},
 };
 
 pub mod prediction;
 pub(crate) mod simulation_world;
 pub(crate) mod template_world;
-
-pub mod prelude {
-    pub use crate::client::{
-        ClientSimulationSystems, NevyPredictionClientPlugin, PredictionInterval, PredictionRates,
-        PredictionServerConnection, PredictionUpdateCreator,
-    };
-    pub use crate::common::simulation::{
-        SimulationTime, StepSimulationSystems, WorldUpdate,
-        schedules::{
-            ExtractSimulation, SimulationPostUpdate, SimulationPreUpdate, SimulationStartup,
-            SimulationUpdate,
-        },
-        simulation_entity::{SimulationEntity, SimulationEntityMap},
-        update_component::UpdateComponent,
-    };
-}
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ClientSimulationSystems {

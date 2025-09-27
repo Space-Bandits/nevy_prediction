@@ -5,7 +5,7 @@ use bevy::{
     prelude::*,
 };
 use example::simulation::PhysicsScheme;
-use nevy_prediction::client::prelude::*;
+use nevy_prediction::prelude::*;
 
 use crate::networking::ClientConnection;
 

@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use nevy_prediction::common::prelude::*;
+use nevy_prediction::prelude::*;
 use serde::{Deserialize, Serialize};
 
 pub fn build(app: &mut App) {

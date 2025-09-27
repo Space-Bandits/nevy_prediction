@@ -22,10 +22,9 @@ use crate::{
         scheme::PredictionScheme,
         simulation::{
             SimulationInstance, SimulationPlugin, SimulationTick, SimulationTime,
-            UpdateExecutionQueue, schedules::SimulationStartupMain,
+            SimulationTimeExt, UpdateExecutionQueue, schedules::SimulationStartupMain,
         },
     },
-    server::prelude::SimulationTimeExt,
 };
 
 pub(crate) fn build<S>(app: &mut App, schedule: Interned<dyn ScheduleLabel>)

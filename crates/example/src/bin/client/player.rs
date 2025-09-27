@@ -1,7 +1,7 @@
 use bevy::{color::palettes::css::*, prelude::*};
 use example::simulation::player::{PlayerInput, RequestMovePlayer, SetLocalPlayer};
 use nevy::MessageId;
-use nevy_prediction::client::prelude::*;
+use nevy_prediction::prelude::*;
 
 use crate::networking::params::{ClientMessages, LocalClientMessageSender};
 

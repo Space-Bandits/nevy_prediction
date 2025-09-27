@@ -4,7 +4,7 @@ use bevy::{
     scene::ScenePlugin,
 };
 use example::simulation::PhysicsScheme;
-use nevy_prediction::server::prelude::*;
+use nevy_prediction::prelude::*;
 
 use crate::state::JoinedClient;
 

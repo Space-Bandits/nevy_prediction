@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use bevy::prelude::*;
-use nevy_prediction::common::prelude::*;
+use nevy_prediction::prelude::*;
 
 use crate::networking::StreamHeader;
 

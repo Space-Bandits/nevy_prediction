@@ -13,28 +13,6 @@ use crate::common::{
 pub mod scheme;
 pub mod simulation;
 
-pub mod prelude {
-    pub use crate::common::{
-        scheme::{AddWorldUpdate, PredictionScheme},
-        simulation::{
-            ExtractSimulationSystems, ReadyUpdates, SimulationInstance, SimulationTick,
-            SimulationTime, SimulationTimeExt, SourceWorld, UpdateExecutionQueue, WorldUpdate,
-            extract_component::ExtractSimulationComponentPlugin,
-            extract_relation::ExtractSimulationRelationPlugin,
-            extract_resource::ExtractSimulationResourcePlugin,
-            schedules::{
-                ExtractSimulation, SimulationPostUpdate, SimulationPreUpdate, SimulationStartup,
-                SimulationUpdate,
-            },
-            simulation_entity::{
-                DespawnSimulationEntities, DespawnSimulatonEntity, SimulationEntity,
-                SimulationEntityMap,
-            },
-            update_component::{UpdateComponent, UpdateComponentPlugin, UpdateComponentSystems},
-        },
-    };
-}
-
 /// Build function run for the client and server app
 pub(crate) fn build<S>(app: &mut App)
 where

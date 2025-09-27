@@ -6,7 +6,7 @@ use example::{
     },
 };
 use nevy::{LocalMessageSender, MessageId, ReceivedMessages};
-use nevy_prediction::server::prelude::*;
+use nevy_prediction::prelude::*;
 
 use crate::{SimulationEntityAllocator, new_pairs::NewPairs, state::JoinedClient};
 

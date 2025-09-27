@@ -17,10 +17,10 @@ use bevy::{
 use serde::{Deserialize, Serialize};
 
 use crate::common::{
-    prelude::{ExtractSimulation, SimulationUpdate},
     scheme::PredictionScheme,
     simulation::{
-        schedules::SimulationMain, simulation_entity::DespawnSimulationEntities,
+        schedules::{ExtractSimulation, SimulationMain, SimulationUpdate},
+        simulation_entity::DespawnSimulationEntities,
         update_component::UpdateComponentSystems,
     },
 };
