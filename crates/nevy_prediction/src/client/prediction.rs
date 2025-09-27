@@ -122,13 +122,6 @@ fn run_prediction_world(world: &mut World) {
                     .clear_target();
 
                 prediction_world.state = PredictionWorldState::Running;
-
-                debug!(
-                    "Started prediction at {:?}",
-                    prediction_world
-                        .resource::<Time<SimulationTime>>()
-                        .current_tick()
-                );
             }
             PredictionWorldState::Running => {
                 let current_tick = prediction_world
@@ -185,11 +178,6 @@ fn drain_prediction_updates<T>(
 {
     while let Some(front) = prediction_updates.front() {
         if front.tick < **prediction_tick {
-            debug!(
-                "dropped a prediction update {} for {:?}",
-                std::any::type_name::<T>(),
-                front.tick
-            );
             prediction_updates.pop_front();
         } else {
             break;

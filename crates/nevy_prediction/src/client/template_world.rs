@@ -212,11 +212,4 @@ fn run_template_world(
 
     budget.template -= execute_ticks;
     template_world.run(execute_ticks);
-
-    debug!(
-        "advanced template world up to {:?}",
-        template_world
-            .resource::<Time<SimulationTime>>()
-            .current_tick()
-    );
 }
