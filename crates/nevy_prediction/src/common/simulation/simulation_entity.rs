@@ -156,9 +156,9 @@ fn extract_simulation_entities(
 /// Despawns any entities that don't have a corresponding simulation entity in the source world, as determined by [`extract_simulation_entities`].
 fn despawn_removed_simulation_entities(
     mut commands: Commands,
-    entity_q: Query<(Entity, Option<&SimulationEntity>), With<RemovedSimulationEntity>>,
+    entity_q: Query<Entity, With<RemovedSimulationEntity>>,
 ) {
-    for (entity, simulation_entity) in &entity_q {
+    for entity in &entity_q {
         commands.entity(entity).despawn();
     }
 }
