@@ -125,6 +125,7 @@ where
             (
                 ExtractSimulationSystems::ExtractEntities,
                 ExtractSimulationSystems::ExtractComponents,
+                ExtractSimulationSystems::DespawnSimulationEntities,
             )
                 .chain(),
         );
