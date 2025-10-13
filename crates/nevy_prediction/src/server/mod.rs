@@ -111,15 +111,14 @@ fn drive_simulation_time<S>(
 fn send_simulation_time_updates<S>(
     time: Res<Time<SimulationTime>>,
     client_q: Query<Entity, With<PredictionClient>>,
-    mut messages: SharedMessageSender<SimulationUpdatesStream>,
-    message_id: Res<MessageId<UpdateServerTick>>,
+    mut messages: SharedNetMessageSender<SimulationUpdatesStream>,
+    message_id: Res<NetMessageId<UpdateServerTick>>,
 ) -> Result
 where
     S: PredictionScheme,
 {
     for client_entity in &client_q {
         messages.write(
-            S::message_header(),
             client_entity,
             *message_id,
             true,
@@ -135,15 +134,14 @@ where
 fn send_simulation_resets<S>(
     new_client_q: Query<Entity, Added<PredictionClient>>,
     time: Res<Time<SimulationTime>>,
-    mut messages: SharedMessageSender<SimulationUpdatesStream>,
-    message_id: Res<MessageId<ResetClientSimulation>>,
+    mut messages: SharedNetMessageSender<SimulationUpdatesStream>,
+    message_id: Res<NetMessageId<ResetClientSimulation>>,
 ) -> Result
 where
     S: PredictionScheme,
 {
     for client_entity in &new_client_q {
         messages.write(
-            S::message_header(),
             client_entity,
             *message_id,
             true,
@@ -170,7 +168,7 @@ where
 /// or it could be the case for a competitive game where some clients should have information that others don't.
 #[derive(SystemParam)]
 pub struct WorldUpdateSender<'w, 's> {
-    pub sender: SharedMessageSender<'w, 's, SimulationUpdatesStream>,
+    pub sender: SharedNetMessageSender<'w, 's, SimulationUpdatesStream>,
     pub time: Res<'w, Time<SimulationTime>>,
 }
 
@@ -183,9 +181,8 @@ impl<'w, 's> WorldUpdateSender<'w, 's> {
     /// because updates sent to clients by this method will immediately be applied.
     pub fn write_now<T>(
         &mut self,
-        header: impl Into<u16>,
         client_entity: Entity,
-        message_id: MessageId<ServerWorldUpdate<T>>,
+        message_id: NetMessageId<ServerWorldUpdate<T>>,
         queue: bool,
         update: T,
     ) -> Result<bool>
@@ -193,7 +190,6 @@ impl<'w, 's> WorldUpdateSender<'w, 's> {
         T: Serialize + Send + Sync + 'static,
     {
         self.write(
-            header,
             client_entity,
             message_id,
             queue,
@@ -223,9 +219,8 @@ impl<'w, 's> WorldUpdateSender<'w, 's> {
     /// In the case where latency is not important, and there is no jerk from this update being reconciled, then it may be simpler to just have this value be false.
     pub fn write<T>(
         &mut self,
-        header: impl Into<u16>,
         client_entity: Entity,
-        message_id: MessageId<ServerWorldUpdate<T>>,
+        message_id: NetMessageId<ServerWorldUpdate<T>>,
         queue: bool,
         include_in_prediction: bool,
         update: WorldUpdate<T>,
@@ -234,7 +229,6 @@ impl<'w, 's> WorldUpdateSender<'w, 's> {
         T: Serialize + Send + Sync + 'static,
     {
         self.sender.write(
-            header,
             client_entity,
             message_id,
             queue,
@@ -246,7 +240,7 @@ impl<'w, 's> WorldUpdateSender<'w, 's> {
     }
 
     /// Gets the underlying [`SharedMessageSender`], for stream operations.
-    pub fn sender(&mut self) -> &mut SharedMessageSender<'w, 's, SimulationUpdatesStream> {
+    pub fn sender(&mut self) -> &mut SharedNetMessageSender<'w, 's, SimulationUpdatesStream> {
         &mut self.sender
     }
 }

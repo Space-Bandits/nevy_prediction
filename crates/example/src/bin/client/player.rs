@@ -1,6 +1,6 @@
 use bevy::{color::palettes::css::*, prelude::*};
 use example::simulation::player::{PlayerInput, RequestMovePlayer, SetLocalPlayer};
-use nevy::MessageId;
+use nevy::*;
 use nevy_prediction::prelude::*;
 
 use crate::networking::params::{ClientMessages, LocalClientMessageSender};
@@ -39,7 +39,7 @@ fn update_player_input(
     local_player: Option<Res<LocalPlayer>>,
     mut updates: PredictionUpdateCreator<UpdateComponent<PlayerInput>>,
     mut messages: LocalClientMessageSender,
-    message_id: Res<MessageId<RequestMovePlayer>>,
+    message_id: Res<NetMessageId<RequestMovePlayer>>,
 ) -> Result {
     messages.flush()?;
 

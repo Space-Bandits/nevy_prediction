@@ -1,5 +1,4 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
-use example::networking::StreamHeader;
 use nevy::*;
 use serde::Serialize;
 
@@ -11,7 +10,7 @@ pub struct ClientMessages<'w, 's, T>
 where
     T: Send + Sync + 'static,
 {
-    connection_q: Query<'w, 's, &'static mut ReceivedMessages<T>, With<ClientConnection>>,
+    connection_q: Query<'w, 's, &'static mut ReceivedNetMessages<T>, With<ClientConnection>>,
 }
 
 impl<'w, 's, T> ClientMessages<'w, 's, T>
@@ -34,7 +33,7 @@ where
 #[derive(SystemParam)]
 pub struct LocalClientMessageSender<'w, 's> {
     client_q: Query<'w, 's, Entity, With<ClientConnection>>,
-    sender: LocalMessageSender<'w, 's>,
+    sender: LocalNetMessageSender<'w, 's>,
 }
 
 impl<'w, 's> LocalClientMessageSender<'w, 's> {
@@ -42,19 +41,19 @@ impl<'w, 's> LocalClientMessageSender<'w, 's> {
         self.sender.flush()
     }
 
-    pub fn write<T>(&mut self, message_id: MessageId<T>, queue: bool, message: &T) -> Result<bool>
+    pub fn write<T>(
+        &mut self,
+        message_id: NetMessageId<T>,
+        queue: bool,
+        message: &T,
+    ) -> Result<bool>
     where
         T: Serialize,
     {
         let client_entity = self.client_q.single()?;
 
-        self.sender.write::<T>(
-            StreamHeader::Messages,
-            client_entity,
-            message_id,
-            queue,
-            message,
-        )
+        self.sender
+            .write::<T>(client_entity, message_id, queue, message)
     }
 
     pub fn finish_if_uncongested(&mut self) -> Result {
@@ -68,26 +67,26 @@ where
     S: Send + Sync + 'static,
 {
     client_q: Query<'w, 's, Entity, With<ClientConnection>>,
-    sender: SharedMessageSender<'w, 's, S>,
+    sender: SharedNetMessageSender<'w, 's, S>,
 }
 
 impl<'w, 's, S> SharedClientMessageSender<'w, 's, S>
 where
     S: Send + Sync + 'static,
 {
-    pub fn write<T>(&mut self, message_id: MessageId<T>, queue: bool, message: &T) -> Result<bool>
+    pub fn write<T>(
+        &mut self,
+        message_id: NetMessageId<T>,
+        queue: bool,
+        message: &T,
+    ) -> Result<bool>
     where
         T: Serialize,
     {
         let client_entity = self.client_q.single()?;
 
-        self.sender.write::<T>(
-            StreamHeader::Messages,
-            client_entity,
-            message_id,
-            queue,
-            message,
-        )
+        self.sender
+            .write::<T>(client_entity, message_id, queue, message)
     }
 
     pub fn finish_if_uncongested(&mut self) -> Result {
