@@ -20,7 +20,7 @@ fn spawn_endpoint(mut commands: Commands) -> Result {
     commands.spawn((
         ServerEndpoint,
         EndpointWithHeaderedConnections,
-        EndpointWithMessageConnections,
+        EndpointWithNetMessageConnections,
         QuicEndpoint::new(
             SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, bind_port),
             quinn_proto::EndpointConfig::default(),

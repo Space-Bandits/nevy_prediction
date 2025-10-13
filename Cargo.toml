@@ -3,5 +3,5 @@ members = ["crates/*"]
 resolver = "2"
 
 [workspace.dependencies]
-bevy = { version = "0.16", default-features = false }
-nevy = "0.1"
+bevy = { version = "0.17", default-features = false }
+nevy = "0.2.2"

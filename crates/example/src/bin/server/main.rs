@@ -42,8 +42,8 @@ fn main() {
     app.run();
 }
 
-fn insert_prediction_clients(trigger: Trigger<OnAdd, JoinedClient>, mut commands: Commands) {
-    commands.entity(trigger.target()).insert(PredictionClient);
+fn insert_prediction_clients(add: On<Add, JoinedClient>, mut commands: Commands) {
+    commands.entity(add.entity).insert(PredictionClient);
 }
 
 #[derive(Resource, Default)]

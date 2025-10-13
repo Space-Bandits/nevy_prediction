@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use nevy::AddMessage;
+use nevy::AddNetMessage;
 use serde::{Deserialize, Serialize};
 
 pub mod networking;
@@ -9,8 +9,8 @@ pub mod simulation;
 pub fn build(app: &mut App) {
     networking::build(app);
 
-    app.add_message::<simulation::player::SetLocalPlayer>();
-    app.add_message::<simulation::player::RequestMovePlayer>();
+    app.add_net_message::<simulation::player::SetLocalPlayer>();
+    app.add_net_message::<simulation::player::RequestMovePlayer>();
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]

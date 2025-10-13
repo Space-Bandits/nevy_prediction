@@ -17,7 +17,7 @@ fn spawn_endpoint(mut commands: Commands) -> Result {
     commands.spawn((
         ClientEndpoint,
         EndpointWithHeaderedConnections,
-        EndpointWithMessageConnections,
+        EndpointWithNetMessageConnections,
         QuicEndpoint::new(
             "0.0.0.0:0",
             quinn_proto::EndpointConfig::default(),

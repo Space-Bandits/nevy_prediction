@@ -4,6 +4,7 @@ use bevy::{
     ecs::{intern::Interned, schedule::ScheduleLabel, system::SystemParam},
     prelude::*,
 };
+use log::{debug, warn};
 use nevy::*;
 
 use crate::{
@@ -197,7 +198,7 @@ fn drive_simulation_time<S>(
 fn receive_reset_simulations(
     mut message_q: Query<(
         Entity,
-        &mut ReceivedMessages<ResetClientSimulation>,
+        &mut ReceivedNetMessages<ResetClientSimulation>,
         Has<PredictionServerConnection>,
     )>,
 ) -> Option<SimulationTick> {

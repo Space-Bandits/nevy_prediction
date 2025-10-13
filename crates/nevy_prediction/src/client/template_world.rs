@@ -9,6 +9,7 @@ use bevy::{
     ecs::{intern::Interned, schedule::ScheduleLabel},
     prelude::*,
 };
+use log::warn;
 use nevy::*;
 
 use crate::{
@@ -82,7 +83,7 @@ fn receive_world_updates<T>(
     mut server_world: ResMut<TemplateWorld>,
     mut message_q: Query<(
         Entity,
-        &mut ReceivedMessages<ServerWorldUpdate<T>>,
+        &mut ReceivedNetMessages<ServerWorldUpdate<T>>,
         Has<PredictionServerConnection>,
     )>,
     mut prediction_world: ResMut<PredictionWorld>,
@@ -173,7 +174,7 @@ impl ServerTickSamples {
 
 /// Responsible for receiving [`UpdateServerTick`]s.
 fn receive_time_updates<S>(
-    mut message_q: Query<&mut ReceivedMessages<UpdateServerTick>>,
+    mut message_q: Query<&mut ReceivedNetMessages<UpdateServerTick>>,
     mut tick_samples: ResMut<ServerTickSamples>,
     real_time: Res<Time<Real>>,
     // mut time: ResMut<Time<SimulationTime>>,

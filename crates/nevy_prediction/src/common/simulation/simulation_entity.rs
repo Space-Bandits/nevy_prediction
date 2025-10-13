@@ -1,4 +1,5 @@
 use bevy::{platform::collections::HashMap, prelude::*};
+use log::error;
 use serde::{Deserialize, Serialize};
 
 use crate::common::{
@@ -82,11 +83,11 @@ impl SimulationEntityMap {
 
 /// Observer to add a simulation entity to the map.
 fn add_simulation_entity(
-    trigger: Trigger<OnInsert, SimulationEntity>,
+    insert: On<Insert, SimulationEntity>,
     entity_q: Query<&SimulationEntity>,
     mut map: ResMut<SimulationEntityMap>,
 ) -> Result {
-    let local_entity = trigger.target();
+    let local_entity = insert.entity;
     let &simulation_entity = entity_q.get(local_entity)?;
 
     if let Some(previous_entity) = map.map.insert(simulation_entity, local_entity) {
@@ -101,11 +102,11 @@ fn add_simulation_entity(
 
 /// Observer to remove a simulation entity from the map.
 fn remove_simulation_entity(
-    trigger: Trigger<OnReplace, SimulationEntity>,
+    replace: On<Replace, SimulationEntity>,
     entity_q: Query<&SimulationEntity>,
     mut map: ResMut<SimulationEntityMap>,
 ) -> Result {
-    let local_entity = trigger.target();
+    let local_entity = replace.entity;
     let &simulation_entity = entity_q.get(local_entity)?;
 
     map.map.remove(&simulation_entity);

@@ -18,8 +18,8 @@ pub(crate) fn build<S>(app: &mut App)
 where
     S: PredictionScheme,
 {
-    app.add_message::<ResetClientSimulation>();
-    app.add_message::<UpdateServerTick>();
+    app.add_net_message::<ResetClientSimulation>();
+    app.add_net_message::<UpdateServerTick>();
 
     app.add_systems(Startup, startup_simulation);
 
@@ -33,7 +33,7 @@ pub(crate) fn build_update<T>(app: &mut App)
 where
     T: Serialize + DeserializeOwned + Send + Sync + 'static,
 {
-    app.add_message::<ServerWorldUpdate<T>>();
+    app.add_net_message::<ServerWorldUpdate<T>>();
 }
 
 /// run on the client and server during the [`Startup`] schedule.

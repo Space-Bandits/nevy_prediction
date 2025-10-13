@@ -5,10 +5,13 @@ pub fn build(app: &mut App) {
     app.add_plugins((
         NevyPlugin::default(),
         NevyHeaderPlugin::default(),
-        NevyMessagesPlugin::new(StreamHeader::Messages),
+        NevyNetMessagesPlugin::new(StreamHeader::Messages),
     ));
 
-    app.add_systems(PostUpdate, log_connection_status.after(UpdateEndpoints));
+    app.add_systems(
+        PostUpdate,
+        log_connection_status.after(UpdateEndpointSystems),
+    );
 }
 
 pub enum StreamHeader {
