@@ -1,6 +1,9 @@
 use std::marker::PhantomData;
 
-use bevy::{ecs::component::Mutable, prelude::*};
+use bevy::{
+    ecs::component::{Mutable, Tick},
+    prelude::*,
+};
 
 use crate::common::simulation::{
     ExtractSimulationSystems, SourceWorld,
@@ -35,15 +38,25 @@ fn extract_component<C>(
     mut commands: Commands,
     mut source_world: ResMut<SourceWorld>,
     map: Res<SimulationEntityMap>,
-    mut source_component_q: Local<Option<QueryState<(&SimulationEntity, &C)>>>,
+    mut source_component_q: Local<Option<QueryState<(&SimulationEntity, Ref<C>)>>>,
+    mut last_run: Local<Tick>,
     mut local_component_q: Query<&mut C>,
 ) -> Result
 where
     C: Component<Mutability = Mutable> + Clone,
 {
+    let this_run = source_world.change_tick();
+
     let new_component_q = source_component_q.get_or_insert_with(|| source_world.query_filtered());
 
     for (&simulation_entity, source_component) in new_component_q.iter(&mut *source_world) {
+        if !source_component
+            .last_changed()
+            .is_newer_than(*last_run, this_run)
+        {
+            continue;
+        }
+
         let local_entity = map.get(simulation_entity).ok_or(format!(
             "{:?} should exist because this system runs after `ExtractSimulationEntities`",
             simulation_entity
@@ -57,6 +70,8 @@ where
                 .insert(source_component.clone());
         }
     }
+
+    *last_run = this_run;
 
     Ok(())
 }
