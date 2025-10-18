@@ -89,6 +89,14 @@ impl PredictionWorld {
             state: PredictionWorldState::Idle,
         }
     }
+
+    pub fn reset<S>(&mut self, tick: SimulationTick)
+    where
+        S: PredictionScheme,
+    {
+        self.world.reset::<S>(tick);
+        self.state = PredictionWorldState::Idle;
+    }
 }
 
 fn run_prediction_world(world: &mut World) {
@@ -148,7 +156,7 @@ fn run_prediction_world(world: &mut World) {
                     >= desired_tick
                 {
                     if current_tick > desired_tick {
-                        warn!(
+                        error!(
                             "Predicted more ticks than desired. Predicted to {:?} instead of {:?}",
                             current_tick, desired_tick,
                         );
