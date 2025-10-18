@@ -142,11 +142,18 @@ fn run_prediction_world(world: &mut World) {
                 budget.prediction -= execute_ticks;
                 prediction_world.run(execute_ticks);
 
-                if desired_tick
-                    == prediction_world
-                        .resource::<Time<SimulationTime>>()
-                        .current_tick()
+                if prediction_world
+                    .resource::<Time<SimulationTime>>()
+                    .current_tick()
+                    >= desired_tick
                 {
+                    if current_tick > desired_tick {
+                        warn!(
+                            "Predicted more ticks than desired. Predicted to {:?} instead of {:?}",
+                            current_tick, desired_tick,
+                        );
+                    }
+
                     prediction_world.extract(world);
                     prediction_world.state = PredictionWorldState::Idle;
                 }
