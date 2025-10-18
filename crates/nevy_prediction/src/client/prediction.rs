@@ -89,6 +89,14 @@ impl PredictionWorld {
             state: PredictionWorldState::Idle,
         }
     }
+
+    pub fn reset<S>(&mut self, tick: SimulationTick)
+    where
+        S: PredictionScheme,
+    {
+        self.world.reset::<S>(tick);
+        self.state = PredictionWorldState::Idle;
+    }
 }
 
 fn run_prediction_world(world: &mut World) {
