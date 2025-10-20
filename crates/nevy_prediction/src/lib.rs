@@ -15,8 +15,8 @@ pub mod prelude {
             ExtractSimulationSystems, ReadyUpdates, SimulationInstance, SimulationTick,
             SimulationTime, SimulationTimeExt, SourceWorld, StepSimulationSystems,
             UpdateExecutionQueue, WorldUpdate,
-            extract_component::ExtractSimulationComponentPlugin,
-            extract_relation::ExtractSimulationRelationPlugin,
+            extract_component::{ExtractComponentSystems, ExtractSimulationComponentPlugin},
+            extract_relation::{ExtractRelationSystems, ExtractSimulationRelationPlugin},
             extract_resource::ExtractSimulationResourcePlugin,
             schedules::{
                 ExtractSimulation, SimulationPostUpdate, SimulationPreUpdate, SimulationStartup,

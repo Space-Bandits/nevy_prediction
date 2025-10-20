@@ -8,6 +8,58 @@ use crate::common::simulation::{
     simulation_entity::{SimulationEntity, SimulationEntityMap},
 };
 
+/// System set where a particular relation component is extracted.
+/// You can configure this set to control what order relation components are extracted in.
+pub struct ExtractRelationSystems<C>(pub PhantomData<C>);
+
+impl<C> std::hash::Hash for ExtractRelationSystems<C>
+where
+    C: 'static,
+{
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::any::TypeId::of::<Self>().hash(state);
+    }
+}
+
+impl<C> bevy::app::DynEq for ExtractRelationSystems<C>
+where
+    C: std::any::Any + Send + Sync + 'static,
+{
+    fn dyn_eq(&self, other: &dyn bevy::app::DynEq) -> bool {
+        (other as &dyn std::any::Any).is::<Self>()
+    }
+}
+
+impl<C> SystemSet for ExtractRelationSystems<C>
+where
+    C: Send + Sync + 'static,
+{
+    #[doc = r" Clones this `"]
+    #[doc = stringify!(SystemSet)]
+    #[doc = r"`."]
+    fn dyn_clone(&self) -> Box<dyn SystemSet> {
+        Box::new(self.clone())
+    }
+}
+
+impl<C> Default for ExtractRelationSystems<C> {
+    fn default() -> Self {
+        Self(PhantomData)
+    }
+}
+
+impl<C> Clone for ExtractRelationSystems<C> {
+    fn clone(&self) -> Self {
+        Self(PhantomData)
+    }
+}
+
+impl<C> std::fmt::Debug for ExtractRelationSystems<C> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("ExtractComponentSystems")
+    }
+}
+
 /// This plugin extracts [`Relationship`] [`Component`]s between [`SimulationEntity`]s.
 ///
 /// This plugin expects all simulation entities that have a relation be related to another simulation entity.
@@ -24,9 +76,15 @@ where
     C: Component + Relationship,
 {
     fn build(&self, app: &mut App) {
+        app.configure_sets(
+            ExtractSimulation,
+            ExtractRelationSystems::<C>::default()
+                .in_set(ExtractSimulationSystems::ExtractComponents),
+        );
+
         app.add_systems(
             ExtractSimulation,
-            extract_relation::<C>.in_set(ExtractSimulationSystems::ExtractComponents),
+            extract_relation::<C>.in_set(ExtractRelationSystems::<C>::default()),
         );
     }
 }
