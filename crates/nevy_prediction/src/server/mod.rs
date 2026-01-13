@@ -4,7 +4,7 @@ use bevy::{
     ecs::{intern::Interned, schedule::ScheduleLabel, system::SystemParam},
     prelude::*,
 };
-use nevy::*;
+use nevy::prelude::*;
 use serde::Serialize;
 
 use crate::common::{
@@ -52,7 +52,9 @@ where
     fn build(&self, app: &mut App) {
         crate::common::build::<S>(app);
 
-        app.add_shared_sender::<SimulationUpdatesStream>();
+        app.add_shared_message_sender::<SimulationUpdatesStream>(
+            StreamRequirements::RELIABLE_ORDERED,
+        );
 
         app.configure_sets(
             self.schedule,
@@ -111,8 +113,7 @@ fn drive_simulation_time<S>(
 fn send_simulation_time_updates<S>(
     time: Res<Time<SimulationTime>>,
     client_q: Query<Entity, With<PredictionClient>>,
-    mut messages: SharedNetMessageSender<SimulationUpdatesStream>,
-    message_id: Res<NetMessageId<UpdateServerTick>>,
+    mut messages: SharedMessageSender<SimulationUpdatesStream>,
 ) -> Result
 where
     S: PredictionScheme,
@@ -120,7 +121,6 @@ where
     for client_entity in &client_q {
         messages.write(
             client_entity,
-            *message_id,
             true,
             &UpdateServerTick {
                 simulation_tick: time.current_tick(),
@@ -134,8 +134,7 @@ where
 fn send_simulation_resets<S>(
     new_client_q: Query<Entity, Added<PredictionClient>>,
     time: Res<Time<SimulationTime>>,
-    mut messages: SharedNetMessageSender<SimulationUpdatesStream>,
-    message_id: Res<NetMessageId<ResetClientSimulation>>,
+    mut messages: SharedMessageSender<SimulationUpdatesStream>,
 ) -> Result
 where
     S: PredictionScheme,
@@ -143,7 +142,6 @@ where
     for client_entity in &new_client_q {
         messages.write(
             client_entity,
-            *message_id,
             true,
             &ResetClientSimulation {
                 simulation_tick: time.current_tick(),
@@ -168,7 +166,7 @@ where
 /// or it could be the case for a competitive game where some clients should have information that others don't.
 #[derive(SystemParam)]
 pub struct WorldUpdateSender<'w, 's> {
-    pub sender: SharedNetMessageSender<'w, 's, SimulationUpdatesStream>,
+    pub sender: SharedMessageSender<'w, 's, SimulationUpdatesStream>,
     pub time: Res<'w, Time<SimulationTime>>,
 }
 
@@ -179,19 +177,12 @@ impl<'w, 's> WorldUpdateSender<'w, 's> {
     ///
     /// Note there is no `include_in_prediction` argument like there is in [`Self::write`],
     /// because updates sent to clients by this method will immediately be applied.
-    pub fn write_now<T>(
-        &mut self,
-        client_entity: Entity,
-        message_id: NetMessageId<ServerWorldUpdate<T>>,
-        queue: bool,
-        update: T,
-    ) -> Result<bool>
+    pub fn write_now<T>(&mut self, client_entity: Entity, queue: bool, update: T) -> Result<bool>
     where
         T: Serialize + Send + Sync + 'static,
     {
         self.write(
             client_entity,
-            message_id,
             queue,
             false,
             WorldUpdate {
@@ -220,7 +211,6 @@ impl<'w, 's> WorldUpdateSender<'w, 's> {
     pub fn write<T>(
         &mut self,
         client_entity: Entity,
-        message_id: NetMessageId<ServerWorldUpdate<T>>,
         queue: bool,
         include_in_prediction: bool,
         update: WorldUpdate<T>,
@@ -230,7 +220,6 @@ impl<'w, 's> WorldUpdateSender<'w, 's> {
     {
         self.sender.write(
             client_entity,
-            message_id,
             queue,
             &ServerWorldUpdate {
                 update,
@@ -240,7 +229,7 @@ impl<'w, 's> WorldUpdateSender<'w, 's> {
     }
 
     /// Gets the underlying [`SharedMessageSender`], for stream operations.
-    pub fn sender(&mut self) -> &mut SharedNetMessageSender<'w, 's, SimulationUpdatesStream> {
+    pub fn sender(&mut self) -> &mut SharedMessageSender<'w, 's, SimulationUpdatesStream> {
         &mut self.sender
     }
 }

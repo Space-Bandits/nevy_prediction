@@ -4,4 +4,7 @@ resolver = "2"
 
 [workspace.dependencies]
 bevy = { version = "0.17", default-features = false }
-nevy = "0.2.2"
+nevy = "0.3"
+
+[patch.crates-io]
+nevy.path = "../nevy"

@@ -4,6 +4,7 @@ use bevy::{
     scene::ScenePlugin,
 };
 use example::simulation::PhysicsScheme;
+use nevy::prelude::*;
 use nevy_prediction::prelude::*;
 
 use crate::state::JoinedClient;
@@ -30,6 +31,7 @@ fn main() {
     example::build(&mut app);
 
     app.add_plugins(NevyPredictionServerPlugin::<PhysicsScheme>::new(Update));
+    app.include_protocol::<(), PredictionMessages>();
 
     networking::build(&mut app);
     state::build(&mut app);

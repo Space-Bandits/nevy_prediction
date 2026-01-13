@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use nevy::*;
+use nevy::prelude::*;
 
 pub fn build(app: &mut App) {
     app.add_systems(Update, join_clients);

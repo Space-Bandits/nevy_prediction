@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use example::simulation::player::{
     Player, PlayerInput, PlayerState, RequestMovePlayer, SetLocalPlayer, SpawnPlayer,
 };
-use nevy::*;
+use nevy::prelude::*;
 use nevy_prediction::prelude::*;
 
 use crate::{SimulationEntityAllocator, new_pairs::NewPairs, state::JoinedClient};
@@ -28,8 +28,7 @@ fn spawn_players(
     mut commands: Commands,
     client_q: Query<Entity, Added<JoinedClient>>,
     mut allocator: ResMut<SimulationEntityAllocator>,
-    mut messages: LocalNetMessageSender,
-    message_id: Res<NetMessageId<SetLocalPlayer>>,
+    mut messages: LocalMessageSender,
 ) -> Result {
     for client_entity in client_q.iter() {
         let entity = allocator.next();
@@ -40,7 +39,7 @@ fn spawn_players(
             .entity(client_entity)
             .insert(ClientPlayer { player_entity });
 
-        messages.write(client_entity, *message_id, true, &SetLocalPlayer { entity })?;
+        messages.write(client_entity, true, &SetLocalPlayer { entity })?;
     }
 
     Ok(())
@@ -49,25 +48,15 @@ fn spawn_players(
 fn init_players(
     pairs: NewPairs<PredictionClient, Player>,
     player_q: Query<(&SimulationEntity, &PlayerInput, &PlayerState)>,
-
     mut updates: WorldUpdateSender,
-    spawn_player: Res<NetMessageId<ServerWorldUpdate<SpawnPlayer>>>,
-    update_input: Res<NetMessageId<ServerWorldUpdate<UpdateComponent<PlayerInput>>>>,
-    update_state: Res<NetMessageId<ServerWorldUpdate<UpdateComponent<PlayerState>>>>,
 ) -> Result {
     for (client_entity, player_entity) in &pairs {
         let (&entity, player_input, player_state) = player_q.get(player_entity)?;
 
-        updates.write_now(
-            client_entity,
-            *spawn_player,
-            true,
-            SpawnPlayer { entity: entity },
-        )?;
+        updates.write_now(client_entity, true, SpawnPlayer { entity: entity })?;
 
         updates.write_now(
             client_entity,
-            *update_input,
             true,
             UpdateComponent {
                 entity: entity,
@@ -77,7 +66,6 @@ fn init_players(
 
         updates.write_now(
             client_entity,
-            *update_state,
             true,
             UpdateComponent {
                 entity: entity,
@@ -93,13 +81,12 @@ fn accept_move_players(
     mut requesting_client_q: Query<(
         Entity,
         &ClientPlayer,
-        &mut ReceivedNetMessages<RequestMovePlayer>,
+        &mut ReceivedMessages<RequestMovePlayer>,
     )>,
     player_q: Query<&SimulationEntity>,
     client_q: Query<Entity, With<PredictionClient>>,
     mut queue: ResMut<UpdateExecutionQueue<UpdateComponent<PlayerInput>>>,
     mut sender: WorldUpdateSender,
-    message_id: Res<NetMessageId<ServerWorldUpdate<UpdateComponent<PlayerInput>>>>,
 ) -> Result {
     for (requesting_client_entity, &ClientPlayer { player_entity }, mut messages) in
         &mut requesting_client_q
@@ -118,7 +105,6 @@ fn accept_move_players(
             for client_entity in &client_q {
                 sender.write(
                     client_entity,
-                    *message_id,
                     true,
                     client_entity != requesting_client_entity,
                     update.clone(),

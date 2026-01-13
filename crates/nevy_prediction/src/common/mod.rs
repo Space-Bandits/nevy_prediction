@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use nevy::*;
+use nevy::prelude::*;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use crate::common::{
@@ -13,19 +13,19 @@ use crate::common::{
 pub mod scheme;
 pub mod simulation;
 
+pub struct PredictionMessages;
+
 /// Build function run for the client and server app
 pub(crate) fn build<S>(app: &mut App)
 where
     S: PredictionScheme,
 {
-    app.add_net_message::<ResetClientSimulation>();
-    app.add_net_message::<UpdateServerTick>();
+    app.init_protocol::<PredictionMessages>();
+
+    app.add_protocol_message::<PredictionMessages, ResetClientSimulation>();
+    app.add_protocol_message::<PredictionMessages, UpdateServerTick>();
 
     app.add_systems(Startup, startup_simulation);
-
-    // for update in S::updates().0 {
-    //     update.build_common(app);
-    // }
 }
 
 /// Build function run for the client and server app per world update
@@ -33,7 +33,7 @@ pub(crate) fn build_update<T>(app: &mut App)
 where
     T: Serialize + DeserializeOwned + Send + Sync + 'static,
 {
-    app.add_net_message::<ServerWorldUpdate<T>>();
+    app.add_protocol_message::<PredictionMessages, ServerWorldUpdate<T>>();
 }
 
 /// run on the client and server during the [`Startup`] schedule.

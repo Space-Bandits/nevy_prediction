@@ -10,7 +10,7 @@ use bevy::{
     prelude::*,
 };
 use log::warn;
-use nevy::*;
+use nevy::prelude::*;
 
 use crate::{
     client::{
@@ -83,7 +83,7 @@ fn receive_world_updates<T>(
     mut server_world: ResMut<TemplateWorld>,
     mut message_q: Query<(
         Entity,
-        &mut ReceivedNetMessages<ServerWorldUpdate<T>>,
+        &mut ReceivedMessages<ServerWorldUpdate<T>>,
         Has<PredictionServerConnection>,
     )>,
     mut prediction_world: ResMut<PredictionWorld>,
@@ -174,7 +174,7 @@ impl ServerTickSamples {
 
 /// Responsible for receiving [`UpdateServerTick`]s.
 fn receive_time_updates<S>(
-    mut message_q: Query<&mut ReceivedNetMessages<UpdateServerTick>>,
+    mut message_q: Query<&mut ReceivedMessages<UpdateServerTick>>,
     mut tick_samples: ResMut<ServerTickSamples>,
     real_time: Res<Time<Real>>,
     // mut time: ResMut<Time<SimulationTime>>,
