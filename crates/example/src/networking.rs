@@ -9,16 +9,6 @@ pub fn build(app: &mut App) {
     app.add_observer(log_status_changes);
 }
 
-pub enum StreamHeader {
-    Messages,
-}
-
-impl Into<u16> for StreamHeader {
-    fn into(self) -> u16 {
-        self as u16
-    }
-}
-
 fn log_status_changes(
     insert: On<Insert, ConnectionStatus>,
     status_q: Query<&ConnectionStatus>,
