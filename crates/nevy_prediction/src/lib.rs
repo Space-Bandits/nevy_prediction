@@ -9,7 +9,7 @@ pub mod prelude {
     };
 
     pub use crate::common::{
-        ServerWorldUpdate,
+        PredictionMessages, ServerWorldUpdate,
         scheme::{AddWorldUpdate, PredictionScheme},
         simulation::{
             ExtractSimulationSystems, ReadyUpdates, SimulationInstance, SimulationTick,

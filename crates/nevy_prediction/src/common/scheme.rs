@@ -9,9 +9,6 @@ use crate::common::simulation::SimulationInstance;
 ///
 /// Implement this trait on a marker type to define a prediction scheme.
 pub trait PredictionScheme: Send + Sync + 'static {
-    /// Which nevy stream header is used for messaging.
-    fn message_header() -> impl Into<u16>;
-
     /// The plugin that should be added to any app that runs the simulation.
     fn plugin() -> impl Plugin;
 

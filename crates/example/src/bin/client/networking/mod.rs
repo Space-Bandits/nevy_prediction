@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use nevy::*;
+use nevy::prelude::*;
 
 pub mod params;
 
@@ -16,20 +16,14 @@ pub struct ClientConnection;
 fn spawn_endpoint(mut commands: Commands) -> Result {
     commands.spawn((
         ClientEndpoint,
-        EndpointWithHeaderedConnections,
-        EndpointWithNetMessageConnections,
-        QuicEndpoint::new(
-            "0.0.0.0:0",
-            quinn_proto::EndpointConfig::default(),
-            None,
-            AlwaysAcceptIncoming::new(),
-        )?,
+        ConnectionProtocol::<()>::default(),
+        QuicEndpoint::new("0.0.0.0:0", quinn_proto::EndpointConfig::default(), None)?,
     ));
 
     Ok(())
 }
 
-pub fn create_connection_config() -> nevy::quinn_proto::ClientConfig {
+pub fn create_connection_config() -> quinn_proto::ClientConfig {
     // some day I need to figure out how to do tls properly
     // someone help me
 
@@ -96,11 +90,11 @@ pub fn create_connection_config() -> nevy::quinn_proto::ClientConfig {
     tls_config.alpn_protocols = vec![b"h3".to_vec()];
 
     let quic_tls_config =
-        nevy::quinn_proto::crypto::rustls::QuicClientConfig::try_from(tls_config).unwrap();
+        quinn_proto::crypto::rustls::QuicClientConfig::try_from(tls_config).unwrap();
     let mut quinn_client_config =
-        nevy::quinn_proto::ClientConfig::new(std::sync::Arc::new(quic_tls_config));
+        quinn_proto::ClientConfig::new(std::sync::Arc::new(quic_tls_config));
 
-    let mut transport_config = nevy::quinn_proto::TransportConfig::default();
+    let mut transport_config = quinn_proto::TransportConfig::default();
     transport_config.max_idle_timeout(Some(std::time::Duration::from_secs(10).try_into().unwrap()));
     transport_config.keep_alive_interval(Some(std::time::Duration::from_millis(200)));
     quinn_client_config.transport_config(std::sync::Arc::new(transport_config));

@@ -5,6 +5,7 @@ use bevy::{
     prelude::*,
 };
 use example::simulation::PhysicsScheme;
+use nevy::prelude::*;
 use nevy_prediction::prelude::*;
 
 use crate::networking::ClientConnection;
@@ -25,6 +26,7 @@ fn main() {
     example::build(&mut app);
 
     app.add_plugins(NevyPredictionClientPlugin::<PhysicsScheme>::default());
+    app.include_protocol::<(), PredictionMessages>();
 
     networking::build(&mut app);
     player::build(&mut app);
@@ -52,8 +54,8 @@ fn debug_connect_to_server(
     commands.spawn((
         ClientConnection,
         PredictionServerConnection,
-        nevy::ConnectionOf(endpoint_entity),
-        nevy::QuicConnectionConfig {
+        ConnectionOf(endpoint_entity),
+        QuicConnectionConfig {
             client_config: networking::create_connection_config(),
             address,
             server_name: "example.server".to_string(),

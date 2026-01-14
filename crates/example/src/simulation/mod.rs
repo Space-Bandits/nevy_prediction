@@ -3,17 +3,11 @@ use std::time::Duration;
 use bevy::prelude::*;
 use nevy_prediction::prelude::*;
 
-use crate::networking::StreamHeader;
-
 pub mod player;
 
 pub struct PhysicsScheme;
 
 impl PredictionScheme for PhysicsScheme {
-    fn message_header() -> impl Into<u16> {
-        StreamHeader::Messages
-    }
-
     fn plugin() -> impl Plugin {
         SimulationPlugin
     }

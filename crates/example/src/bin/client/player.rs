@@ -1,6 +1,5 @@
 use bevy::{color::palettes::css::*, prelude::*};
 use example::simulation::player::{PlayerInput, RequestMovePlayer, SetLocalPlayer};
-use nevy::*;
 use nevy_prediction::prelude::*;
 
 use crate::networking::params::{ClientMessages, LocalClientMessageSender};
@@ -39,7 +38,6 @@ fn update_player_input(
     local_player: Option<Res<LocalPlayer>>,
     mut updates: PredictionUpdateCreator<UpdateComponent<PlayerInput>>,
     mut messages: LocalClientMessageSender,
-    message_id: Res<NetMessageId<RequestMovePlayer>>,
 ) -> Result {
     messages.flush()?;
 
@@ -70,7 +68,6 @@ fn update_player_input(
     debug!("Moving: {}", player_input.movement_vector());
 
     messages.write(
-        *message_id,
         false,
         &RequestMovePlayer {
             tick: update.tick,

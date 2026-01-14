@@ -5,7 +5,7 @@ use bevy::{
     prelude::*,
 };
 use log::{debug, warn};
-use nevy::*;
+use nevy::prelude::*;
 
 use crate::{
     client::{
@@ -198,7 +198,7 @@ fn drive_simulation_time<S>(
 fn receive_reset_simulations(
     mut message_q: Query<(
         Entity,
-        &mut ReceivedNetMessages<ResetClientSimulation>,
+        &mut ReceivedMessages<ResetClientSimulation>,
         Has<PredictionServerConnection>,
     )>,
 ) -> Option<SimulationTick> {
