@@ -4,6 +4,7 @@ use bevy::{
     ecs::{intern::Interned, schedule::ScheduleLabel},
     prelude::*,
 };
+use log::error;
 
 use crate::{
     client::{

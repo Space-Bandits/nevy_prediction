@@ -28,7 +28,7 @@ fn set_local_player(mut commands: Commands, mut messages: ClientMessages<SetLoca
 
 fn render_players(mut gizmos: Gizmos, player_q: Query<&GlobalTransform>) {
     for transform in &player_q {
-        gizmos.cuboid(*transform, WHITE);
+        gizmos.cube(*transform, WHITE);
     }
 }
 
