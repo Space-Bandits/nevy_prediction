@@ -55,8 +55,14 @@ where
 }
 
 /// Contains a [`SimulationWorld`] that holds the most recently known state of the simulation according to the server.
+/// This is the "source of truth" for the simulation on the client.
+///
+/// Unlike the prediction world, this world is public. This allows for mutating the simulation outside of the normal world update flow.
+/// This is meant to be used for loading data slowly where the tradeoff of a moment of desync is more desireable than a large hitch.
+///
+/// Derefs directly to a [`World`].
 #[derive(Resource, Deref, DerefMut)]
-pub(crate) struct TemplateWorld(pub SimulationWorld);
+pub struct TemplateWorld(pub SimulationWorld);
 
 impl TemplateWorld {
     pub fn build<S>() -> Self
