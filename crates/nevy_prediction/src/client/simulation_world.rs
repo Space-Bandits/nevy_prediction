@@ -11,8 +11,8 @@ use crate::common::{
 };
 
 /// A separate world for containing prediction logic
-#[derive(Resource, Deref, DerefMut)]
-pub(crate) struct SimulationWorld(World);
+#[derive(Deref, DerefMut)]
+pub struct SimulationWorld(World);
 
 impl SimulationWorld {
     pub fn build(mut app: App) -> Self {
