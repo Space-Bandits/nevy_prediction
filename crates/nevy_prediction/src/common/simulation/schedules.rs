@@ -34,7 +34,7 @@ pub struct SimulationPostUpdate;
 #[derive(ScheduleLabel, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ResetSimulation;
 
-/// Schedule that extracts the simulation state from a [`SourceWorld`] into the current (local) world.
+/// Schedule that extracts the simulation state from a [`SourceWorld`](crate::common::simulation::SourceWorld) into the current (local) world.
 #[derive(ScheduleLabel, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ExtractSimulation;
 

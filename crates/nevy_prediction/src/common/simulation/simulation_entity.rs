@@ -28,7 +28,7 @@ pub fn build(app: &mut App) {
                 extract_simulation_entities,
             )
                 .chain()
-                .in_set(ExtractSimulationSystems::ExtractEntities),
+                .in_set(ExtractSimulationSystems::ExtractSimulationEntities),
             despawn_removed_simulation_entities
                 .in_set(ExtractSimulationSystems::DespawnSimulationEntities),
         ),
@@ -49,7 +49,7 @@ pub fn build(app: &mut App) {
 /// Use this component in your world updates and when extracting data between simulation instances to identify an entity.
 ///
 /// Entities with this component will be automatically spawned and despawned
-/// during the [`ExtractSimulation`] schedule in the [`ExtractSimulationEntitiesSystems`] system set.
+/// during the [`ExtractSimulation`] schedule in the [`ExtractSimulationSystems::ExtractSimulationEntities`] and [`ExtractSimulationSystems::DespawnSimulationEntities`] system sets.
 /// If you order an extract system to run after this system set you can use the [`SimulationEntity`] on an entity
 /// in the [`SourceWorld`] to identify its corresponding entity in the local world with the local [`SimulationEntityMap`].
 ///
@@ -160,7 +160,9 @@ fn despawn_removed_simulation_entities(
     entity_q: Query<Entity, With<RemovedSimulationEntity>>,
 ) {
     for entity in &entity_q {
-        commands.entity(entity).despawn();
+        // In situations where we are despawning entities in hierarchies, we may despawn parent entities first.
+        // Use `try_despawn` to avoid warnings in these situations.
+        commands.entity(entity).try_despawn();
     }
 }
 
@@ -192,6 +194,8 @@ fn apply_despawn_simulation_entities(
             "Simulation entity {:?} did not exist locally when trying to despawn it.",
             entity
         ))?;
+
+        debug!("Applying despawn for {} {}", entity, local_entity);
 
         commands.entity(local_entity).despawn();
     }
