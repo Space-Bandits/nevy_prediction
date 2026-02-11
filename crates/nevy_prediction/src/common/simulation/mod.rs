@@ -36,7 +36,7 @@ pub mod update_component;
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ExtractSimulationSystems {
     /// Where new simulation entities are extracted.
-    ExtractEntities,
+    ExtractSimulationEntities,
     /// Where components added by
     /// [`ExtractSimulationComponentPlugin`](extract_component::ExtractSimulationComponentPlugin)
     /// and relations added by [`ExtractSimulationRelationPlugin`](extract_relation::ExtractSimulationRelationPlugin)
@@ -124,7 +124,7 @@ where
         app.configure_sets(
             ExtractSimulation,
             (
-                ExtractSimulationSystems::ExtractEntities,
+                ExtractSimulationSystems::ExtractSimulationEntities,
                 ExtractSimulationSystems::ExtractComponents,
                 ExtractSimulationSystems::DespawnSimulationEntities,
             )
