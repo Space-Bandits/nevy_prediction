@@ -1,4 +1,8 @@
-use bevy::{platform::collections::HashMap, prelude::*};
+use bevy::{
+    ecs::{lifecycle::HookContext, world::DeferredWorld},
+    platform::collections::HashMap,
+    prelude::*,
+};
 use log::error;
 use serde::{Deserialize, Serialize};
 
@@ -16,9 +20,6 @@ pub struct DespawnSimulationEntities;
 
 pub fn build(app: &mut App) {
     app.init_resource::<SimulationEntityMap>();
-
-    app.add_observer(add_simulation_entity);
-    app.add_observer(remove_simulation_entity);
 
     app.add_systems(
         ExtractSimulation,
@@ -57,7 +58,7 @@ pub fn build(app: &mut App) {
 /// so if you have many types of entities with this component you don't have to create a system that despawns
 /// each of them.
 #[derive(Component, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[component(immutable)]
+#[component(immutable, on_insert = Self::on_insert, on_replace = Self::on_replace)]
 pub struct SimulationEntity(pub u64);
 
 impl std::fmt::Display for SimulationEntity {
@@ -81,38 +82,35 @@ impl SimulationEntityMap {
     }
 }
 
-/// Observer to add a simulation entity to the map.
-fn add_simulation_entity(
-    insert: On<Insert, SimulationEntity>,
-    entity_q: Query<&SimulationEntity>,
-    mut map: ResMut<SimulationEntityMap>,
-) -> Result {
-    let local_entity = insert.entity;
-    let &simulation_entity = entity_q.get(local_entity)?;
+impl SimulationEntity {
+    fn on_insert(mut world: DeferredWorld, ctx: HookContext) {
+        let &simulation_entity = world.get::<Self>(ctx.entity).unwrap();
 
-    if let Some(previous_entity) = map.map.insert(simulation_entity, local_entity) {
-        error!(
-            "Simulation entity {:?} was inserted on {}, but already existed on {}.",
-            simulation_entity, local_entity, previous_entity
-        );
+        if let Some(previous_entity) = world
+            .resource_mut::<SimulationEntityMap>()
+            .map
+            .insert(simulation_entity, ctx.entity)
+        {
+            error!(
+                "Simulation entity {:?} was inserted on {}, but already existed on {}.",
+                simulation_entity, ctx.entity, previous_entity
+            );
+        }
     }
 
-    Ok(())
+    fn on_replace(mut world: DeferredWorld, ctx: HookContext) {
+        let &simulation_entity = world.get::<Self>(ctx.entity).unwrap();
+
+        world
+            .resource_mut::<SimulationEntityMap>()
+            .map
+            .remove(&simulation_entity);
+    }
 }
 
-/// Observer to remove a simulation entity from the map.
-fn remove_simulation_entity(
-    replace: On<Replace, SimulationEntity>,
-    entity_q: Query<&SimulationEntity>,
-    mut map: ResMut<SimulationEntityMap>,
-) -> Result {
-    let local_entity = replace.entity;
-    let &simulation_entity = entity_q.get(local_entity)?;
-
-    map.map.remove(&simulation_entity);
-
-    Ok(())
-}
+/// Lower priority entities are despawned first.
+#[derive(Component, Default, Deref, Clone, Copy)]
+pub struct ExtractDespawnPriority(pub i32);
 
 /// Marker component used to determine which simulation entities but no longer exist in the source world.
 #[derive(Component)]
@@ -157,9 +155,20 @@ fn extract_simulation_entities(
 /// Despawns any entities that don't have a corresponding simulation entity in the source world, as determined by [`extract_simulation_entities`].
 fn despawn_removed_simulation_entities(
     mut commands: Commands,
-    entity_q: Query<Entity, With<RemovedSimulationEntity>>,
+    entity_q: Query<(Entity, Option<&ExtractDespawnPriority>), With<RemovedSimulationEntity>>,
 ) {
-    for entity in &entity_q {
+    let mut despawn_order: Vec<(i32, Entity)> = Vec::new();
+
+    for (entity, priority) in &entity_q {
+        let priority = **priority.unwrap_or(&default());
+
+        let (Ok(index) | Err(index)) =
+            despawn_order.binary_search_by(|&(probe, _)| probe.cmp(&priority));
+
+        despawn_order.insert(index, (priority, entity));
+    }
+
+    for (_, entity) in despawn_order {
         // In situations where we are despawning entities in hierarchies, we may despawn parent entities first.
         // Use `try_despawn` to avoid warnings in these situations.
         commands.entity(entity).try_despawn();
@@ -194,8 +203,6 @@ fn apply_despawn_simulation_entities(
             "Simulation entity {:?} did not exist locally when trying to despawn it.",
             entity
         ))?;
-
-        debug!("Applying despawn for {} {}", entity, local_entity);
 
         commands.entity(local_entity).despawn();
     }

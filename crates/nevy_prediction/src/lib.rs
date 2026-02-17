@@ -23,8 +23,8 @@ pub mod prelude {
                 SimulationUpdate,
             },
             simulation_entity::{
-                DespawnSimulationEntities, DespawnSimulatonEntity, SimulationEntity,
-                SimulationEntityMap,
+                DespawnSimulationEntities, DespawnSimulatonEntity, ExtractDespawnPriority,
+                SimulationEntity, SimulationEntityMap,
             },
             update_component::{UpdateComponent, UpdateComponentPlugin, UpdateComponentSystems},
         },
