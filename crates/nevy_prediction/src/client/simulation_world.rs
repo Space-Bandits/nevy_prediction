@@ -5,7 +5,7 @@ use bevy::{app::PluginsState, prelude::*};
 use crate::common::{
     scheme::PredictionScheme,
     simulation::{
-        PrivateSimulationTimeExt, SimulationTick, SimulationTime, SourceWorld,
+        PrivateSimulationTimeExt, SimulationInstance, SimulationTick, SimulationTime, SourceWorld,
         schedules::{ExtractSimulation, ResetSimulation},
     },
 };
@@ -43,7 +43,13 @@ impl SimulationWorld {
     {
         self.insert_resource(Time::<SimulationTime>::from_tick::<S>(tick));
 
-        self.run_schedule(ResetSimulation);
+        info_span!(
+            "ResetSimulation",
+            simulation_instance = self.resource::<SimulationInstance>().format_tracing_str()
+        )
+        .in_scope(|| {
+            self.run_schedule(ResetSimulation);
+        });
     }
 
     /// Extracts this [`SimulationWorld`] into another [`World`]
@@ -57,7 +63,17 @@ impl SimulationWorld {
 
         // Insert source world and run extract schedule.
         target_world.insert_resource(SourceWorld(owned_world));
-        target_world.run_schedule(ExtractSimulation);
+
+        info_span!(
+            "ExtractSimulation",
+            simulation_instance = target_world
+                .resource::<SimulationInstance>()
+                .format_tracing_str()
+        )
+        .in_scope(|| {
+            target_world.run_schedule(ExtractSimulation);
+        });
+
         let SourceWorld(owned_world) = target_world
             .remove_resource()
             .expect("Extract schedule removed the `SourceWorld`");

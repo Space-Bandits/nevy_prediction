@@ -96,6 +96,17 @@ pub enum SimulationInstance {
     ClientPrediction,
 }
 
+impl SimulationInstance {
+    pub(crate) fn format_tracing_str(self) -> &'static str {
+        match self {
+            SimulationInstance::Server => "Server",
+            SimulationInstance::ClientMain => "ClientMain",
+            SimulationInstance::ClientTemplate => "ClientTemplate",
+            SimulationInstance::ClientPrediction => "ClientPrediction",
+        }
+    }
+}
+
 /// This plugin is added to all instances of the simulation.
 ///
 /// Controls the execution of the [SimulationUpdate] and [SimulationTime].
@@ -168,6 +179,7 @@ where
         }
 
         *world.resource_mut::<Time>() = simulation_time.as_generic();
+
         world.run_schedule(SimulationMain);
 
         // `SimulationTime` contains the timestamp of the *next* update, so we advance it after executing `SimulationUpdate`.
