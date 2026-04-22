@@ -89,13 +89,17 @@ fn run_simulation_main(world: &mut World) {
 }
 
 fn run_simulation_startup_main(world: &mut World) {
-    info_span!(
-        "SimulationStartup",
-        simulation_instance = world.resource::<SimulationInstance>().format_tracing_str(),
-    )
-    .in_scope(|| {
-        world.run_schedule(SimulationPreUpdate);
-        world.run_schedule(SimulationUpdate);
-        world.run_schedule(SimulationPostUpdate);
+    let simulation_instance = world.resource::<SimulationInstance>().format_tracing_str();
+
+    info_span!("SimulationPreStartup", simulation_instance).in_scope(|| {
+        world.run_schedule(SimulationPreStartup);
+    });
+
+    info_span!("SimulationStartup", simulation_instance).in_scope(|| {
+        world.run_schedule(SimulationStartup);
+    });
+
+    info_span!("SimulationPostStartup", simulation_instance).in_scope(|| {
+        world.run_schedule(SimulationPostStartup);
     });
 }
