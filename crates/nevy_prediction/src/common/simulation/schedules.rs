@@ -1,3 +1,7 @@
+use crate::{
+    common::simulation::{SimulationInstance, SimulationTime},
+    prelude::SimulationTimeExt,
+};
 use bevy::{
     ecs::schedule::{ExecutorKind, ScheduleLabel},
     prelude::*,
@@ -68,13 +72,34 @@ pub fn build(app: &mut App) {
 }
 
 fn run_simulation_main(world: &mut World) {
-    world.run_schedule(SimulationPreUpdate);
-    world.run_schedule(SimulationUpdate);
-    world.run_schedule(SimulationPostUpdate);
+    let simulation_instance = world.resource::<SimulationInstance>().format_tracing_str();
+    let simulation_tick = world.resource::<Time<SimulationTime>>().current_tick().0;
+
+    info_span!("SimulationPreUpdate", simulation_instance, simulation_tick).in_scope(|| {
+        world.run_schedule(SimulationPreUpdate);
+    });
+
+    info_span!("SimulationUpdate", simulation_instance, simulation_tick).in_scope(|| {
+        world.run_schedule(SimulationUpdate);
+    });
+
+    info_span!("SimulationPostUpdate", simulation_instance, simulation_tick).in_scope(|| {
+        world.run_schedule(SimulationPostUpdate);
+    });
 }
 
 fn run_simulation_startup_main(world: &mut World) {
-    world.run_schedule(SimulationPreUpdate);
-    world.run_schedule(SimulationUpdate);
-    world.run_schedule(SimulationPostUpdate);
+    let simulation_instance = world.resource::<SimulationInstance>().format_tracing_str();
+
+    info_span!("SimulationPreStartup", simulation_instance).in_scope(|| {
+        world.run_schedule(SimulationPreStartup);
+    });
+
+    info_span!("SimulationStartup", simulation_instance).in_scope(|| {
+        world.run_schedule(SimulationStartup);
+    });
+
+    info_span!("SimulationPostStartup", simulation_instance).in_scope(|| {
+        world.run_schedule(SimulationPostStartup);
+    });
 }
