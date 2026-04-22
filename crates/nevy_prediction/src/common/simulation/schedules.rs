@@ -75,15 +75,15 @@ fn run_simulation_main(world: &mut World) {
     let simulation_instance = world.resource::<SimulationInstance>().format_tracing_str();
     let simulation_tick = world.resource::<Time<SimulationTime>>().current_tick().0;
 
-    info_span!("SimulationPreUpdate", simulation_instance, simulation_tick,).in_scope(|| {
+    info_span!("SimulationPreUpdate", simulation_instance, simulation_tick).in_scope(|| {
         world.run_schedule(SimulationPreUpdate);
     });
 
-    info_span!("SimulationUpdate", simulation_instance, simulation_tick,).in_scope(|| {
+    info_span!("SimulationUpdate", simulation_instance, simulation_tick).in_scope(|| {
         world.run_schedule(SimulationUpdate);
     });
 
-    info_span!("SimulationPostUpdate", simulation_instance, simulation_tick,).in_scope(|| {
+    info_span!("SimulationPostUpdate", simulation_instance, simulation_tick).in_scope(|| {
         world.run_schedule(SimulationPostUpdate);
     });
 }
