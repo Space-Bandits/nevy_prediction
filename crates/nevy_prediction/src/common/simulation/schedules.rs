@@ -3,9 +3,10 @@ use crate::{
     prelude::SimulationTimeExt,
 };
 use bevy::{
-    ecs::schedule::{ExecutorKind, ScheduleLabel},
+    ecs::schedule::{ScheduleLabel, SingleThreadedExecutor},
     prelude::*,
 };
+use tracing::info_span;
 
 #[derive(ScheduleLabel, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct SimulationStartupMain;
@@ -44,10 +45,10 @@ pub struct ExtractSimulation;
 
 pub fn build(app: &mut App) {
     let mut startup = Schedule::new(SimulationMain);
-    startup.set_executor_kind(ExecutorKind::SingleThreaded);
+    startup.set_executor(SingleThreadedExecutor::new());
 
     let mut main = Schedule::new(SimulationMain);
-    main.set_executor_kind(ExecutorKind::SingleThreaded);
+    main.set_executor(SingleThreadedExecutor::new());
 
     app.add_schedule(startup);
     app.add_schedule(main);
@@ -62,7 +63,7 @@ pub fn build(app: &mut App) {
 
     // Single threaded as most systems will mutably access the source world.
     let mut extract = Schedule::new(ExtractSimulation);
-    extract.set_executor_kind(ExecutorKind::SingleThreaded);
+    extract.set_executor(SingleThreadedExecutor::new());
 
     app.add_schedule(extract);
     app.add_schedule(Schedule::new(ResetSimulation));

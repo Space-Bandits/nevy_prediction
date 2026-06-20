@@ -1,6 +1,7 @@
 //! Contains logic for running schedules on a world asynchronously to the main app.
 
 use bevy::{app::PluginsState, prelude::*};
+use tracing::info_span;
 
 use crate::common::{
     scheme::PredictionScheme,
