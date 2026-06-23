@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use bevy::prelude::*;
+use bevy::{ecs::component::Mutable, prelude::*};
 
 use crate::common::simulation::{SourceWorld, schedules::ExtractSimulation};
 
@@ -15,7 +15,7 @@ impl<R> Default for ExtractSimulationResourcePlugin<R> {
 
 impl<R> Plugin for ExtractSimulationResourcePlugin<R>
 where
-    R: Send + Sync + 'static + Resource + Clone,
+    R: Send + Sync + 'static + Resource + Clone + Component<Mutability = Mutable>,
 {
     fn build(&self, app: &mut App) {
         app.add_systems(ExtractSimulation, extract_resource::<R>);
@@ -24,7 +24,7 @@ where
 
 fn extract_resource<R>(source_world: Res<SourceWorld>, local_resource: Option<ResMut<R>>) -> Result
 where
-    R: Resource + Clone,
+    R: Resource + Clone + Component<Mutability = Mutable>,
 {
     let source_resource = source_world.get_resource::<R>().ok_or(format!(
         "Resource {} was not present in source world when trying to extract it",

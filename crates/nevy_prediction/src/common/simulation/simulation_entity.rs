@@ -58,7 +58,7 @@ pub fn build(app: &mut App) {
 /// so if you have many types of entities with this component you don't have to create a system that despawns
 /// each of them.
 #[derive(Component, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[component(immutable, on_insert = Self::on_insert, on_replace = Self::on_replace)]
+#[component(immutable, on_insert = Self::on_insert, on_discard = Self::on_discard)]
 pub struct SimulationEntity(pub u64);
 
 impl std::fmt::Display for SimulationEntity {
@@ -98,7 +98,7 @@ impl SimulationEntity {
         }
     }
 
-    fn on_replace(mut world: DeferredWorld, ctx: HookContext) {
+    fn on_discard(mut world: DeferredWorld, ctx: HookContext) {
         let &simulation_entity = world.get::<Self>(ctx.entity).unwrap();
 
         world
