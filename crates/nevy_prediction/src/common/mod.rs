@@ -2,13 +2,7 @@ use bevy::prelude::*;
 use nevy::prelude::*;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
-use crate::common::{
-    scheme::PredictionScheme,
-    simulation::{
-        SimulationTick, WorldUpdate,
-        schedules::{ResetSimulation, SimulationStartup},
-    },
-};
+use crate::common::simulation::{SimulationTick, WorldUpdate, schedules::SimulationStartupMain};
 
 pub mod scheme;
 pub mod simulation;
@@ -16,16 +10,13 @@ pub mod simulation;
 pub struct PredictionMessages;
 
 /// Build function run for the client and server app
-pub(crate) fn build<S>(app: &mut App)
-where
-    S: PredictionScheme,
-{
+pub(crate) fn build(app: &mut App) {
     app.init_protocol::<PredictionMessages>();
 
     app.add_protocol_message::<PredictionMessages, ResetClientSimulation>();
     app.add_protocol_message::<PredictionMessages, UpdateServerTick>();
 
-    app.add_systems(Startup, startup_simulation);
+    app.add_systems(PreStartup, startup_simulation);
 }
 
 /// Build function run for the client and server app per world update
@@ -36,10 +27,9 @@ where
     app.add_protocol_message::<PredictionMessages, ServerWorldUpdate<T>>();
 }
 
-/// run on the client and server during the [`Startup`] schedule.
+/// Runs the startup schedules for all simulations
 fn startup_simulation(world: &mut World) {
-    world.run_schedule(SimulationStartup);
-    world.run_schedule(ResetSimulation);
+    world.run_schedule(SimulationStartupMain);
 }
 
 /// Server -> Client message to reset the simulation.

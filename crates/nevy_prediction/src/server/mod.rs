@@ -8,12 +8,12 @@ use nevy::prelude::*;
 use serde::Serialize;
 
 use crate::common::{
-    ResetClientSimulation, ServerWorldUpdate, UpdateServerTick,
     scheme::PredictionScheme,
     simulation::{
-        PrivateSimulationTimeExt, SimulationInstance, SimulationPlugin, SimulationTime,
-        SimulationTimeExt, StepSimulationSystems, WorldUpdate, schedules::SimulationPostUpdate,
+        schedules::SimulationPostUpdate, PrivateSimulationTimeExt, SimulationInstance,
+        SimulationPlugin, SimulationTime, SimulationTimeExt, StepSimulationSystems, WorldUpdate,
     },
+    ResetClientSimulation, ServerWorldUpdate, UpdateServerTick,
 };
 
 #[derive(SystemSet, Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -50,7 +50,7 @@ where
     S: PredictionScheme,
 {
     fn build(&self, app: &mut App) {
-        crate::common::build::<S>(app);
+        crate::common::build(app);
 
         app.add_shared_message_sender::<SimulationUpdatesStream>(
             StreamRequirements::RELIABLE_ORDERED,

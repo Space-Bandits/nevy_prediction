@@ -4,7 +4,7 @@ use bevy::{
     ecs::{intern::Interned, schedule::ScheduleLabel},
     prelude::*,
 };
-use log::error;
+use tracing::error;
 
 use crate::{
     client::{
@@ -16,7 +16,7 @@ use crate::{
         simulation::{
             PrivateSimulationTimeExt, SimulationInstance, SimulationPlugin, SimulationTick,
             SimulationTime, SimulationTimeExt, UpdateExecutionQueue, WorldUpdateQueue,
-            schedules::{SimulationPreUpdate, SimulationStartupMain},
+            schedules::SimulationPreUpdate,
         },
     },
 };
@@ -82,8 +82,6 @@ impl PredictionWorld {
             schedule: Main.intern(),
             instance: SimulationInstance::ClientPrediction,
         });
-
-        app.world_mut().run_schedule(SimulationStartupMain);
 
         PredictionWorld {
             world: SimulationWorld::build(app),

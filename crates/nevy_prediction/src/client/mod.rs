@@ -4,8 +4,8 @@ use bevy::{
     ecs::{intern::Interned, schedule::ScheduleLabel, system::SystemParam},
     prelude::*,
 };
-use log::{debug, warn};
 use nevy::prelude::*;
+use tracing::{debug, warn};
 
 use crate::{
     client::{
@@ -83,7 +83,7 @@ where
                 .chain(),
         );
 
-        crate::common::build::<S>(app);
+        crate::common::build(app);
         template_world::build::<S>(app, self.schedule);
         prediction::build::<S>(app, self.schedule);
 

@@ -3,8 +3,8 @@ use bevy::{
     platform::collections::HashMap,
     prelude::*,
 };
-use log::error;
 use serde::{Deserialize, Serialize};
+use tracing::error;
 
 use crate::common::{
     scheme::AddWorldUpdate,
