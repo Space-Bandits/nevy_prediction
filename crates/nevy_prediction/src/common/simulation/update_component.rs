@@ -1,8 +1,8 @@
 use std::marker::PhantomData;
 
 use bevy::{ecs::component::Mutable, prelude::*};
-use log::warn;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use tracing::warn;
 
 use crate::common::{
     scheme::AddWorldUpdate,

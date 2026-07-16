@@ -9,8 +9,8 @@ use bevy::{
     ecs::{intern::Interned, schedule::ScheduleLabel},
     prelude::*,
 };
-use log::warn;
 use nevy::prelude::*;
+use tracing::warn;
 
 use crate::{
     client::{
@@ -23,7 +23,7 @@ use crate::{
         scheme::PredictionScheme,
         simulation::{
             SimulationInstance, SimulationPlugin, SimulationTick, SimulationTime,
-            SimulationTimeExt, UpdateExecutionQueue, schedules::SimulationStartupMain,
+            SimulationTimeExt, UpdateExecutionQueue,
         },
     },
 };
@@ -78,8 +78,6 @@ impl TemplateWorld {
             schedule: Main.intern(),
             instance: SimulationInstance::ClientTemplate,
         });
-
-        app.world_mut().run_schedule(SimulationStartupMain);
 
         TemplateWorld(SimulationWorld::build(app))
     }

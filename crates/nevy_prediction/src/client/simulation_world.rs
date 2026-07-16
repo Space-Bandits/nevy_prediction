@@ -7,7 +7,7 @@ use crate::common::{
     scheme::PredictionScheme,
     simulation::{
         PrivateSimulationTimeExt, SimulationInstance, SimulationTick, SimulationTime, SourceWorld,
-        schedules::{ExtractSimulation, ResetSimulation},
+        schedules::{ExtractSimulation, ResetSimulation, SimulationStartupMain},
     },
 };
 
@@ -24,7 +24,9 @@ impl SimulationWorld {
         app.finish();
         app.cleanup();
 
-        let world = std::mem::take(app.world_mut());
+        let mut world = std::mem::take(app.world_mut());
+
+        world.run_schedule(SimulationStartupMain);
 
         SimulationWorld(world)
     }

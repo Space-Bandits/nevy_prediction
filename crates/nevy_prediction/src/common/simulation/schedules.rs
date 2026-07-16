@@ -8,6 +8,16 @@ use bevy::{
 };
 use tracing::info_span;
 
+/// Runs
+///
+/// - [`SimulationPreStartup`]
+/// - [`SimulationStartup`]
+/// - [`SimulationPostStartup`]
+/// - [`ResetSimulation`]
+///
+/// For all simulation instances.
+///
+/// Runs during [`PreStartup`] for main apps.
 #[derive(ScheduleLabel, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct SimulationStartupMain;
 
@@ -35,7 +45,7 @@ pub struct SimulationPostUpdate;
 /// This schedule resets the simulation instance.
 /// Add systems to this schedule that remove data belonging to the simulation, as well as initialize any new data.
 ///
-/// This is different from [`SimulationStartup`] in that it may run multiple times over the lifetime of the world.
+/// This is different from [`SimulationStartup`] and its siblings in that it may run multiple times over the lifetime of the world.
 #[derive(ScheduleLabel, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ResetSimulation;
 
@@ -92,6 +102,8 @@ fn run_simulation_main(world: &mut World) {
 fn run_simulation_startup_main(world: &mut World) {
     let simulation_instance = world.resource::<SimulationInstance>().format_tracing_str();
 
+    debug!("Running startup for {:?}", simulation_instance);
+
     info_span!("SimulationPreStartup", simulation_instance).in_scope(|| {
         world.run_schedule(SimulationPreStartup);
     });
@@ -102,5 +114,9 @@ fn run_simulation_startup_main(world: &mut World) {
 
     info_span!("SimulationPostStartup", simulation_instance).in_scope(|| {
         world.run_schedule(SimulationPostStartup);
+    });
+
+    info_span!("ResetSimulation", simulation_instance).in_scope(|| {
+        world.run_schedule(ResetSimulation);
     });
 }

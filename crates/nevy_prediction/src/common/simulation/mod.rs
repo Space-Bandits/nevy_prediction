@@ -14,8 +14,8 @@ use bevy::{
     ecs::{entity::MapEntities, intern::Interned, schedule::ScheduleLabel, system::SystemParam},
     prelude::*,
 };
-use log::warn;
 use serde::{Deserialize, Serialize};
+use tracing::warn;
 
 use crate::common::{
     scheme::PredictionScheme,
