@@ -1,0 +1,9 @@
+[package]
+name = "netsim"
+version = "0.1.0"
+edition = "2024"
+description = "UDP relay that simulates latency, jitter, packet loss and more for testing networked games"
+
+[dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+toml = "1.1.7"
