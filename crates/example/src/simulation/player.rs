@@ -77,7 +77,6 @@ impl PlayerInput {
                 _ => 0.0,
             },
         )
-        .normalize_or_zero()
     }
 }
 

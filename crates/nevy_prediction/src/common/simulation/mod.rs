@@ -276,7 +276,7 @@ where
 
             if update.tick != self.time.current_tick() {
                 warn!(
-                    "Returned an update `{}` late by {} ticks in instance {:?}",
+                    "An update `{}` was returned {} ticks late in {:?}.",
                     std::any::type_name::<T>(),
                     (*self.time.current_tick()).saturating_sub(*update.tick),
                     *self.instance,
