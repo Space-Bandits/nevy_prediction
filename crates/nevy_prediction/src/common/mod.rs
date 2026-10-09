@@ -24,6 +24,8 @@ where
 
     app.add_protocol_message::<PredictionMessages, ResetClientSimulation>();
     app.add_protocol_message::<PredictionMessages, UpdateServerTick>();
+    app.add_protocol_message::<PredictionMessages, TickProbe>();
+    app.add_protocol_message::<PredictionMessages, TickProbeResult>();
 
     app.add_systems(Startup, startup_simulation);
 }
@@ -55,6 +57,23 @@ pub(crate) struct ResetClientSimulation {
 #[derive(Serialize, Deserialize)]
 pub(crate) struct UpdateServerTick {
     pub simulation_tick: SimulationTick,
+}
+
+/// Client -> Server message used to measure how early the client's world updates arrive.
+///
+/// Sent at the same point in the frame as world updates are created, stamped with the same tick.
+#[derive(Serialize, Deserialize)]
+pub(crate) struct TickProbe {
+    pub simulation_tick: SimulationTick,
+}
+
+/// Server -> Client response to a [`TickProbe`].
+#[derive(Serialize, Deserialize)]
+pub(crate) struct TickProbeResult {
+    pub simulation_tick: SimulationTick,
+    /// Seconds before the server would have executed the probe's tick that it was received.
+    /// Negative if it arrived too late.
+    pub lead: f32,
 }
 
 /// Server -> Client message to apply a [`WorldUpdate`].

@@ -10,6 +10,7 @@ use nevy_prediction::prelude::*;
 
 use crate::networking::ClientConnection;
 
+pub mod debug_ui;
 pub mod networking;
 pub mod player;
 
@@ -30,8 +31,10 @@ fn main() {
 
     networking::build(&mut app);
     player::build(&mut app);
+    debug_ui::build(&mut app);
 
-    app.insert_resource(PredictionInterval(Duration::from_millis(1000)));
+    // starting point, adapted to network conditions once connected
+    app.insert_resource(PredictionInterval(Duration::from_millis(100)));
 
     app.add_systems(PostStartup, debug_connect_to_server);
     app.add_systems(Startup, setup_camera);

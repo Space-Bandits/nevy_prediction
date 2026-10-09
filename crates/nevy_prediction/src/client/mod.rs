@@ -9,6 +9,7 @@ use nevy::prelude::*;
 
 use crate::{
     client::{
+        interval::IntervalController,
         prediction::{PredictionUpdates, PredictionWorld},
         template_world::{ServerTickSamples, TemplateWorld},
     },
@@ -23,6 +24,7 @@ use crate::{
     },
 };
 
+pub mod interval;
 pub mod prediction;
 pub(crate) mod simulation_world;
 pub(crate) mod template_world;
@@ -85,6 +87,7 @@ where
 
         crate::common::build::<S>(app);
         template_world::build::<S>(app, self.schedule);
+        interval::build(app, self.schedule);
         prediction::build::<S>(app, self.schedule);
 
         app.add_plugins(SimulationPlugin::<S> {
@@ -99,7 +102,12 @@ where
                 receive_reset_simulations
                     .pipe(reset_simulations::<S>)
                     .in_set(ClientSimulationSystems::ResetSimulation),
-                drive_simulation_time::<S>.in_set(ClientSimulationSystems::ReceiveUpdates),
+                (
+                    interval::update_prediction_interval,
+                    drive_simulation_time::<S>,
+                )
+                    .chain()
+                    .in_set(ClientSimulationSystems::ReceiveUpdates),
             ),
         );
 
@@ -150,6 +158,9 @@ struct PredictionBudget {
 }
 
 /// Controls how far prediction is run.
+///
+/// Unless [`PredictionIntervalSettings::adaptive`](interval::PredictionIntervalSettings::adaptive) is disabled
+/// this is adjusted automatically, and the value it is set to is only the starting point.
 #[derive(Resource, Default, Deref, DerefMut)]
 pub struct PredictionInterval(pub Duration);
 
@@ -245,6 +256,7 @@ where
     world.run_schedule(ResetSimulation);
 
     world.init_resource::<PredictionBudget>();
+    world.resource_mut::<IntervalController>().reset();
 
     let real_time = world.resource::<Time<Real>>().elapsed();
     world

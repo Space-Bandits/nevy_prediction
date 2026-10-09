@@ -8,11 +8,12 @@ use nevy::prelude::*;
 use serde::Serialize;
 
 use crate::common::{
-    ResetClientSimulation, ServerWorldUpdate, UpdateServerTick,
+    ResetClientSimulation, ServerWorldUpdate, TickProbe, TickProbeResult, UpdateServerTick,
     scheme::PredictionScheme,
     simulation::{
-        PrivateSimulationTimeExt, SimulationInstance, SimulationPlugin, SimulationTime,
-        SimulationTimeExt, StepSimulationSystems, WorldUpdate, schedules::SimulationPostUpdate,
+        PrivateSimulationTimeExt, SimulationInstance, SimulationPlugin, SimulationTick,
+        SimulationTime, SimulationTimeExt, StepSimulationSystems, WorldUpdate,
+        schedules::SimulationPostUpdate,
     },
 };
 
@@ -52,6 +53,8 @@ where
     fn build(&self, app: &mut App) {
         crate::common::build::<S>(app);
 
+        app.init_resource::<SimulationOverstep>();
+
         app.add_shared_message_sender::<SimulationUpdatesStream>(
             StreamRequirements::RELIABLE_ORDERED,
         );
@@ -76,7 +79,9 @@ where
             self.schedule,
             (
                 send_simulation_resets::<S>.in_set(ServerSimulationSystems::SendResets),
-                drive_simulation_time::<S>.in_set(ServerSimulationSystems::QueueUpdates),
+                (drive_simulation_time::<S>, respond_to_tick_probes::<S>)
+                    .chain()
+                    .in_set(ServerSimulationSystems::QueueUpdates),
             ),
         );
 
@@ -91,23 +96,66 @@ pub struct SimulationUpdatesStream;
 #[derive(Component)]
 pub struct PredictionClient;
 
+/// Real time accumulated that hasn't been queued as a simulation tick yet.
+#[derive(Resource, Default, Deref, DerefMut)]
+struct SimulationOverstep(Duration);
+
 fn drive_simulation_time<S>(
     mut time: ResMut<Time<SimulationTime>>,
     real_time: Res<Time<Real>>,
-    mut overstep: Local<Duration>,
+    mut overstep: ResMut<SimulationOverstep>,
 ) where
     S: PredictionScheme,
 {
-    *overstep += real_time.delta();
+    **overstep += real_time.delta();
 
     loop {
-        if *overstep < S::step_interval() {
+        if **overstep < S::step_interval() {
             break;
         }
-        *overstep -= S::step_interval();
+        **overstep -= S::step_interval();
 
         time.queue_ticks(1);
     }
+}
+
+/// Tells clients how early their probes arrived,
+/// which they use to adjust how far ahead they predict.
+///
+/// Runs where world updates from clients are queued so that it measures the same thing.
+fn respond_to_tick_probes<S>(
+    time: Res<Time<SimulationTime>>,
+    overstep: Res<SimulationOverstep>,
+    mut client_q: Query<(Entity, &mut ReceivedMessages<TickProbe>), With<PredictionClient>>,
+    mut messages: SharedMessageSender<SimulationUpdatesStream>,
+) -> Result
+where
+    S: PredictionScheme,
+{
+    let now = time.target_tick().time::<S>() + **overstep;
+
+    for (client_entity, mut probes) in &mut client_q {
+        for TickProbe { simulation_tick } in probes.drain() {
+            // a tick is executed once the simulation time passes its end
+            let deadline = SimulationTick(*simulation_tick + 1).time::<S>();
+            let lead = if deadline >= now {
+                (deadline - now).as_secs_f32()
+            } else {
+                -(now - deadline).as_secs_f32()
+            };
+
+            messages.write(
+                client_entity,
+                true,
+                &TickProbeResult {
+                    simulation_tick,
+                    lead,
+                },
+            )?;
+        }
+    }
+
+    Ok(())
 }
 
 fn send_simulation_time_updates<S>(
