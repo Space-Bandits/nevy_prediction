@@ -15,10 +15,7 @@ use log::warn;
 use nevy::prelude::*;
 
 use crate::{
-    client::{
-        ClientPredictionSchedule, ClientSimulationSystems, PredictionInterval,
-        PredictionServerConnection,
-    },
+    client::{ClientPredictionSchedule, ClientSimulationSystems, PredictionServerConnection},
     common::{
         TickProbe, TickProbeResult,
         simulation::{SimulationTick, SimulationTime, SimulationTimeExt},
@@ -29,6 +26,7 @@ use crate::{
 const PROBE_TIMEOUT: Duration = Duration::from_secs(2);
 
 pub(crate) fn build(app: &mut App, schedule: Interned<dyn ScheduleLabel>) {
+    app.init_resource::<PredictionInterval>();
     app.init_resource::<PredictionIntervalSettings>();
     app.init_resource::<PredictionIntervalStats>();
     app.init_resource::<IntervalController>();
@@ -40,6 +38,13 @@ pub(crate) fn build(app: &mut App, schedule: Interned<dyn ScheduleLabel>) {
         send_tick_probes.in_set(ClientSimulationSystems::QueueUpdates),
     );
 }
+
+/// Controls how far prediction is run.
+///
+/// Unless [`PredictionIntervalSettings::adaptive`](interval::PredictionIntervalSettings::adaptive) is disabled
+/// this is adjusted automatically.
+#[derive(Resource, Default, Deref, DerefMut)]
+pub struct PredictionInterval(pub Duration);
 
 /// Publishes [`PredictionInterval`] and [`PredictionIntervalStats`] as bevy [`Diagnostic`]s.
 ///

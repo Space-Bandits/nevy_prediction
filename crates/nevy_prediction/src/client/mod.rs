@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, time::Duration};
+use std::marker::PhantomData;
 
 use bevy::{
     ecs::{intern::Interned, schedule::ScheduleLabel, system::SystemParam},
@@ -9,7 +9,7 @@ use tracing::{debug, warn};
 
 use crate::{
     client::{
-        interval::IntervalController,
+        interval::{IntervalController, PredictionInterval},
         prediction::{PredictionUpdates, PredictionWorld},
         template_world::{ServerTickSamples, TemplateWorld},
     },
@@ -156,13 +156,6 @@ struct PredictionBudget {
     template_overstep: f32,
     prediction_overstep: f32,
 }
-
-/// Controls how far prediction is run.
-///
-/// Unless [`PredictionIntervalSettings::adaptive`](interval::PredictionIntervalSettings::adaptive) is disabled
-/// this is adjusted automatically, and the value it is set to is only the starting point.
-#[derive(Resource, Default, Deref, DerefMut)]
-pub struct PredictionInterval(pub Duration);
 
 /// Marker component that must be inserted onto the server connection entity for prediction.
 #[derive(Component)]
