@@ -4,8 +4,13 @@ pub mod server;
 
 pub mod prelude {
     pub use crate::client::{
-        ClientSimulationSystems, NevyPredictionClientPlugin, PredictionInterval, PredictionRates,
-        PredictionServerConnection, PredictionUpdateCreator, template_world::TemplateWorld,
+        ClientSimulationSystems, NevyPredictionClientPlugin, PredictionRates,
+        PredictionServerConnection, PredictionUpdateCreator,
+        interval::{
+            PredictionDiagnosticsPlugin, PredictionInterval, PredictionIntervalSettings,
+            PredictionIntervalStats,
+        },
+        template_world::TemplateWorld,
     };
 
     pub use crate::common::{
