@@ -6,7 +6,7 @@ use bevy::{
     ecs::schedule::{ScheduleLabel, SingleThreadedExecutor},
     prelude::*,
 };
-use tracing::info_span;
+use tracing::{debug, info_span};
 
 /// Runs
 ///
@@ -54,7 +54,7 @@ pub struct ResetSimulation;
 pub struct ExtractSimulation;
 
 pub fn build(app: &mut App) {
-    let mut startup = Schedule::new(SimulationMain);
+    let mut startup = Schedule::new(SimulationStartupMain);
     startup.set_executor(SingleThreadedExecutor::new());
 
     let mut main = Schedule::new(SimulationMain);

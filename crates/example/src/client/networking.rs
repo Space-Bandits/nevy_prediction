@@ -1,10 +1,11 @@
-use bevy::prelude::*;
+use bevy::{ecs::system::SystemParam, prelude::*};
 use nevy::prelude::*;
-
-pub mod params;
+use nevy_prediction::prelude::*;
+use serde::Serialize;
 
 pub fn build(app: &mut App) {
     app.add_systems(Startup, spawn_endpoint);
+    app.add_systems(PostStartup, connect_to_server);
 }
 
 #[derive(Component)]
@@ -18,6 +19,27 @@ fn spawn_endpoint(mut commands: Commands) -> Result {
         ClientEndpoint,
         ConnectionProtocol::<()>::default(),
         QuicEndpoint::new("0.0.0.0:0", quinn_proto::EndpointConfig::default(), None)?,
+    ));
+
+    Ok(())
+}
+
+fn connect_to_server(
+    mut commands: Commands,
+    endpoint_q: Query<Entity, With<ClientEndpoint>>,
+    config: Res<super::Config>,
+) -> Result {
+    let endpoint_entity = endpoint_q.single()?;
+
+    commands.spawn((
+        ClientConnection,
+        PredictionServerConnection,
+        ConnectionOf(endpoint_entity),
+        QuicConnectionConfig {
+            client_config: create_connection_config(),
+            address: config.0.server_address,
+            server_name: "example.server".to_string(),
+        },
     ));
 
     Ok(())
@@ -100,4 +122,82 @@ pub fn create_connection_config() -> quinn_proto::ClientConfig {
     quinn_client_config.transport_config(std::sync::Arc::new(transport_config));
 
     quinn_client_config
+}
+
+/// Utility parameter for receiving messages on the client connection.
+#[derive(SystemParam)]
+pub struct ClientMessages<'w, 's, T>
+where
+    T: Send + Sync + 'static,
+{
+    connection_q: Query<'w, 's, &'static mut ReceivedMessages<T>, With<ClientConnection>>,
+}
+
+impl<'w, 's, T> ClientMessages<'w, 's, T>
+where
+    T: Send + Sync + 'static,
+{
+    pub fn drain(&mut self) -> impl Iterator<Item = T> + '_ {
+        let mut messages = Vec::new();
+
+        if let Ok(mut received_messages) = self.connection_q.single_mut() {
+            for message in received_messages.drain() {
+                messages.push(message);
+            }
+        }
+
+        messages.into_iter()
+    }
+}
+
+#[derive(SystemParam)]
+pub struct LocalClientMessageSender<'w, 's> {
+    client_q: Query<'w, 's, Entity, With<ClientConnection>>,
+    sender: LocalMessageSender<'w, 's>,
+}
+
+impl<'w, 's> LocalClientMessageSender<'w, 's> {
+    pub fn flush(&mut self) -> Result {
+        self.sender.flush()
+    }
+
+    pub fn write<T>(&mut self, queue: bool, message: &T) -> Result<bool>
+    where
+        T: Serialize + 'static,
+    {
+        let client_entity = self.client_q.single()?;
+
+        self.sender.write(client_entity, queue, message)
+    }
+
+    pub fn close_unused_streams(&mut self) -> Result {
+        self.sender.close_unused_streams()
+    }
+}
+
+#[derive(SystemParam)]
+pub struct SharedClientMessageSender<'w, 's, S>
+where
+    S: Send + Sync + 'static,
+{
+    client_q: Query<'w, 's, Entity, With<ClientConnection>>,
+    sender: SharedMessageSender<'w, 's, S>,
+}
+
+impl<'w, 's, S> SharedClientMessageSender<'w, 's, S>
+where
+    S: Send + Sync + 'static,
+{
+    pub fn write<T>(&mut self, queue: bool, message: &T) -> Result<bool>
+    where
+        T: Serialize + 'static,
+    {
+        let client_entity = self.client_q.single()?;
+
+        self.sender.write(client_entity, queue, message)
+    }
+
+    pub fn close_unused_streams(&mut self) -> Result {
+        self.sender.close_unused_streams()
+    }
 }

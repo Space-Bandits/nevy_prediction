@@ -22,7 +22,7 @@ pub trait AddWorldUpdate {
     ///
     /// This should be called by the plugin provided by [`PredictionScheme`].
     /// The order that updates are added in should be the same for all instances of the plugin.
-    /// See [`nevy::messages::AddMessage::add_message`].
+    /// See `nevy`'s `add_protocol_message`.
     fn add_world_update<T>(&mut self) -> &mut Self
     where
         T: Send + Sync + 'static + Serialize + DeserializeOwned + Clone;
@@ -33,24 +33,26 @@ impl AddWorldUpdate for App {
     where
         T: Send + Sync + 'static + Serialize + DeserializeOwned + Clone,
     {
-        let instance = self.world().resource::<SimulationInstance>();
+        let instance = *self.world().resource::<SimulationInstance>();
 
         match instance {
-            SimulationInstance::Server => {
-                crate::common::build_update::<T>(self);
-                crate::common::simulation::build_update::<T>(self);
-            }
-            SimulationInstance::ClientMain => {
-                crate::client::build_update::<T>(self);
-                crate::common::build_update::<T>(self);
-                crate::common::simulation::build_update::<T>(self);
-            }
-            SimulationInstance::ClientTemplate => {
+            SimulationInstance::Server
+            | SimulationInstance::ClientMain
+            | SimulationInstance::ClientTemplate => {
                 crate::common::simulation::build_update::<T>(self);
             }
             SimulationInstance::ClientPrediction => {
                 crate::common::simulation::build_update::<T>(self);
+                crate::client::prediction::build_update::<T>(self);
             }
+            SimulationInstance::ServerApp => {
+                crate::common::build_update::<T>(self);
+            }
+            SimulationInstance::ClientApp => {
+                crate::client::build_update::<T>(self);
+                crate::common::build_update::<T>(self);
+            }
+            SimulationInstance::Snapshot => {}
         }
 
         self

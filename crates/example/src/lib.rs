@@ -1,11 +1,24 @@
+//! An example game using `nevy_prediction`, built to be useful for testing and profiling it.
+//!
+//! - [`server`] and [`client`] build the server and client apps from a config.
+//! - [`simulation`] is the shared simulation: players moved by inputs, drones that add load,
+//!   and a configurable [`Workload`](simulation::workload::Workload) that makes ticks artificially expensive.
+//! - [`loadtest`] runs a server and many headless clients in one process and reports how prediction performed.
+//!
+//! The `server`, `client` and `loadtest` binaries are thin wrappers around these.
+
 use bevy::prelude::*;
 use nevy::prelude::*;
-use serde::{Deserialize, Serialize};
 
+pub mod args;
+pub mod client;
+pub mod loadtest;
 pub mod networking;
+pub mod report;
+pub mod server;
 pub mod simulation;
 
-/// common logic for the server and client apps
+/// Common logic for the server and client apps.
 pub fn build(app: &mut App) {
     networking::build(app);
 
@@ -13,17 +26,11 @@ pub fn build(app: &mut App) {
     app.add_protocol_message::<(), simulation::player::RequestMovePlayer>();
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct ServerEntity(Entity);
+/// Spins the current thread for a duration, to simulate expensive work.
+pub fn spin_for(duration: std::time::Duration) {
+    let start = std::time::Instant::now();
 
-impl From<ServerEntity> for Entity {
-    fn from(value: ServerEntity) -> Self {
-        value.0
-    }
-}
-
-impl From<Entity> for ServerEntity {
-    fn from(value: Entity) -> Self {
-        ServerEntity(value)
+    while start.elapsed() < duration {
+        std::hint::spin_loop();
     }
 }

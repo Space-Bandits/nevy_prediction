@@ -1,6 +1,6 @@
 //! Adapts the [`PredictionInterval`] to network conditions.
 //!
-//! The client periodically sends a [`TickProbe`] stamped with its current tick, the same way world updates are stamped.
+//! The client periodically sends a `TickProbe` stamped with its current tick, the same way world updates are stamped.
 //! The server responds with how early it arrived, which accounts for latency, jitter and processing delays in one measurement.
 //! The interval is then moved towards whatever would have made almost all recent probes arrive on time, plus a margin.
 
@@ -15,11 +15,12 @@ use log::warn;
 use nevy::prelude::*;
 
 use crate::{
-    client::{ClientPredictionSchedule, ClientSimulationSystems, PredictionServerConnection},
-    common::{
-        TickProbe, TickProbeResult,
-        simulation::{SimulationTick, SimulationTime, SimulationTimeExt},
+    client::{
+        ClientPredictionSchedule, ClientPredictionStream, ClientSimulationSystems,
+        PredictionServerConnection,
+        pipeline::{ClientSimulation, ClientSimulationStats},
     },
+    common::{TickProbe, TickProbeResult, simulation::SimulationTick},
 };
 
 /// How long to wait for a probe result before considering it lost.
@@ -31,8 +32,6 @@ pub(crate) fn build(app: &mut App, schedule: Interned<dyn ScheduleLabel>) {
     app.init_resource::<PredictionIntervalStats>();
     app.init_resource::<IntervalController>();
 
-    app.add_shared_message_sender::<TickProbeStream>(StreamRequirements::RELIABLE_ORDERED);
-
     app.add_systems(
         schedule,
         send_tick_probes.in_set(ClientSimulationSystems::QueueUpdates),
@@ -41,7 +40,7 @@ pub(crate) fn build(app: &mut App, schedule: Interned<dyn ScheduleLabel>) {
 
 /// Controls how far prediction is run.
 ///
-/// Unless [`PredictionIntervalSettings::adaptive`](interval::PredictionIntervalSettings::adaptive) is disabled
+/// Unless [`PredictionIntervalSettings::adaptive`] is disabled
 /// this is adjusted automatically.
 #[derive(Resource, Default, Deref, DerefMut)]
 pub struct PredictionInterval(pub Duration);
@@ -66,22 +65,59 @@ impl PredictionDiagnosticsPlugin {
     /// [`PredictionIntervalStats::lost_probes`].
     pub const LOST_PROBES: DiagnosticPath =
         DiagnosticPath::const_new("nevy_prediction/lost_probes");
+    /// [`ClientSimulationStats::time_scale`].
+    pub const TIME_SCALE: DiagnosticPath =
+        DiagnosticPath::const_new("nevy_prediction/time_scale");
+    /// [`ClientSimulationStats::capacity`].
+    pub const CAPACITY: DiagnosticPath = DiagnosticPath::const_new("nevy_prediction/capacity");
+    /// Average main world tick cost in milliseconds.
+    pub const MAIN_TICK: DiagnosticPath = DiagnosticPath::const_new("nevy_prediction/main_tick");
+    /// Average template world tick cost in milliseconds.
+    pub const TEMPLATE_TICK: DiagnosticPath =
+        DiagnosticPath::const_new("nevy_prediction/template_tick");
+    /// Average prediction world tick cost in milliseconds.
+    pub const PREDICTION_TICK: DiagnosticPath =
+        DiagnosticPath::const_new("nevy_prediction/prediction_tick");
+    /// [`ClientSimulationStats::prediction_length`].
+    pub const PREDICTION_LENGTH: DiagnosticPath =
+        DiagnosticPath::const_new("nevy_prediction/prediction_length");
+    /// [`ClientSimulationStats::main_lag`].
+    pub const MAIN_LAG: DiagnosticPath = DiagnosticPath::const_new("nevy_prediction/main_lag");
+    /// [`ClientSimulationStats::template_lag`].
+    pub const TEMPLATE_LAG: DiagnosticPath =
+        DiagnosticPath::const_new("nevy_prediction/template_lag");
 }
 
 impl Plugin for PredictionDiagnosticsPlugin {
     fn build(&self, app: &mut App) {
-        for path in [Self::INTERVAL, Self::TARGET, Self::REQUIRED, Self::RTT] {
+        for path in [
+            Self::INTERVAL,
+            Self::TARGET,
+            Self::REQUIRED,
+            Self::RTT,
+            Self::MAIN_TICK,
+            Self::TEMPLATE_TICK,
+            Self::PREDICTION_TICK,
+        ] {
             app.register_diagnostic(Diagnostic::new(path).with_suffix("ms"));
         }
 
-        for path in [Self::LATE_PROBES, Self::LOST_PROBES] {
+        for path in [
+            Self::LATE_PROBES,
+            Self::LOST_PROBES,
+            Self::TIME_SCALE,
+            Self::CAPACITY,
+            Self::PREDICTION_LENGTH,
+            Self::MAIN_LAG,
+            Self::TEMPLATE_LAG,
+        ] {
             app.register_diagnostic(Diagnostic::new(path));
         }
 
         let schedule = **app.world().resource::<ClientPredictionSchedule>();
         app.add_systems(
             schedule,
-            measure_diagnostics.after(ClientSimulationSystems::ReceiveUpdates),
+            measure_diagnostics.after(crate::common::simulation::SyncSimulationSystems),
         );
     }
 }
@@ -90,6 +126,7 @@ fn measure_diagnostics(
     mut diagnostics: Diagnostics,
     interval: Res<PredictionInterval>,
     stats: Res<PredictionIntervalStats>,
+    simulation: Res<ClientSimulationStats>,
 ) {
     let millis = |duration: Duration| duration.as_secs_f64() * 1000.;
 
@@ -113,10 +150,43 @@ fn measure_diagnostics(
     diagnostics.add_measurement(&PredictionDiagnosticsPlugin::LOST_PROBES, || {
         stats.lost_probes as f64
     });
-}
 
-/// Marker type for the [`SharedMessageSender`] used to send [`TickProbe`]s.
-struct TickProbeStream;
+    diagnostics.add_measurement(&PredictionDiagnosticsPlugin::TIME_SCALE, || {
+        simulation.time_scale as f64
+    });
+
+    for (path, value) in [
+        (&PredictionDiagnosticsPlugin::CAPACITY, simulation.capacity),
+        (
+            &PredictionDiagnosticsPlugin::PREDICTION_LENGTH,
+            simulation.prediction_length,
+        ),
+    ] {
+        if let Some(value) = value {
+            diagnostics.add_measurement(path, || value as f64);
+        }
+    }
+
+    for (path, lane) in [
+        (&PredictionDiagnosticsPlugin::MAIN_TICK, &simulation.main),
+        (&PredictionDiagnosticsPlugin::TEMPLATE_TICK, &simulation.template),
+        (
+            &PredictionDiagnosticsPlugin::PREDICTION_TICK,
+            &simulation.prediction,
+        ),
+    ] {
+        if let Some(cost) = lane.tick_cost {
+            diagnostics.add_measurement(path, || millis(cost));
+        }
+    }
+
+    diagnostics.add_measurement(&PredictionDiagnosticsPlugin::MAIN_LAG, || {
+        simulation.main_lag as f64
+    });
+    diagnostics.add_measurement(&PredictionDiagnosticsPlugin::TEMPLATE_LAG, || {
+        simulation.template_lag as f64
+    });
+}
 
 /// Controls how the [`PredictionInterval`] adapts to network conditions.
 #[derive(Resource, Clone, Debug)]
@@ -297,13 +367,14 @@ impl PredictionIntervalSettings {
 fn send_tick_probes(
     settings: Res<PredictionIntervalSettings>,
     mut controller: ResMut<IntervalController>,
-    time: Res<Time<SimulationTime>>,
+    simulation: Res<ClientSimulation>,
     interval: Res<PredictionInterval>,
     real_time: Res<Time<Real>>,
     server_q: Query<Entity, With<PredictionServerConnection>>,
-    mut messages: SharedMessageSender<TickProbeStream>,
+    mut messages: SharedMessageSender<ClientPredictionStream>,
 ) -> Result {
-    let tick = time.current_tick();
+    // stamped the same way as world updates
+    let tick = simulation.stamp();
 
     if !settings.adaptive || !controller.should_probe(tick, settings.probe_interval) {
         return Ok(());

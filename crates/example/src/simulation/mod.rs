@@ -3,7 +3,9 @@ use std::time::Duration;
 use bevy::prelude::*;
 use nevy_prediction::prelude::*;
 
+pub mod drones;
 pub mod player;
+pub mod workload;
 
 pub struct PhysicsScheme;
 
@@ -22,5 +24,7 @@ pub struct SimulationPlugin;
 impl Plugin for SimulationPlugin {
     fn build(&self, app: &mut App) {
         player::build(app);
+        drones::build(app);
+        workload::build(app);
     }
 }

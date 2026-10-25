@@ -1,7 +1,8 @@
 //! This module contains logic that controls the execution of a simulation instance.
 //!
 //! It adds a [`SimulationTime`] clock which is the generic [`Time`] resource for the [`SimulationUpdate`] schedule.
-//! This schedule is run on a fixed timestep with [`SimulationTime`], and is advanced up to [`SimulationTimeTarget`].
+//! This schedule is run on a fixed timestep with [`SimulationTime`] in separate simulation worlds,
+//! which are stepped on simulation threads.
 //!
 //! It also controls when [`WorldUpdate`]s are applied with a [`WorldUpdateQueue`].
 //!
@@ -11,7 +12,7 @@
 use std::{collections::VecDeque, marker::PhantomData, time::Duration};
 
 use bevy::{
-    ecs::{entity::MapEntities, intern::Interned, schedule::ScheduleLabel, system::SystemParam},
+    ecs::{entity::MapEntities, system::SystemParam},
     prelude::*,
 };
 use serde::{Deserialize, Serialize};
@@ -20,7 +21,7 @@ use tracing::warn;
 use crate::common::{
     scheme::PredictionScheme,
     simulation::{
-        schedules::{ExtractSimulation, SimulationMain, SimulationUpdate},
+        schedules::{ExtractSimulation, SimulationUpdate},
         simulation_entity::DespawnSimulationEntities,
         update_component::UpdateComponentSystems,
     },
@@ -32,6 +33,7 @@ pub mod extract_resource;
 pub mod schedules;
 pub mod simulation_entity;
 pub mod update_component;
+pub(crate) mod world;
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ExtractSimulationSystems {
@@ -80,40 +82,101 @@ pub struct SimulationTime {
     target_tick: SimulationTick,
 }
 
-/// System set where [`SimulationUpdate`] is run.
+/// System set in the app where the app synchronizes with the simulation.
+///
+/// The simulation itself runs asynchronously to the app on separate threads.
+/// In this set the latest simulation state is extracted into the app's world,
+/// and [`Time<PredictionTime>`](crate::common::time::PredictionTime) is advanced.
+///
+/// Order systems that read the simulation state after this set.
 #[derive(SystemSet, Clone, Copy, Default, Debug, PartialEq, Eq, Hash)]
-pub struct StepSimulationSystems;
+pub struct SyncSimulationSystems;
 
 /// A resource that exists to inform the simulation where it is running.
 ///
 /// This should not change the behavior of the simulation,
 /// but is useful for debugging and inserting different resources when building plugins based on where the simulation is running.
-#[derive(Resource, Clone, Copy, Debug)]
+///
+/// The simulation is only executed in [stepping](Self::steps) instances, which each have their own world on a simulation thread.
+/// The other instances only receive simulation state through the [`ExtractSimulation`] schedule.
+#[derive(Resource, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum SimulationInstance {
+    /// The authoritative simulation on the server.
     Server,
+    /// The server app's world, which the [`Server`](Self::Server) simulation is extracted into after it ticks.
+    ServerApp,
+    /// The client's local simulation, which runs ahead of the server by the prediction interval.
+    ///
+    /// It is stepped on its own, and has the [`ClientPrediction`](Self::ClientPrediction) world
+    /// extracted into it whenever a prediction finishes.
     ClientMain,
+    /// The client's copy of the server's simulation, built from the world updates that the server sends.
     ClientTemplate,
+    /// A world that is forked from the [`ClientTemplate`](Self::ClientTemplate) world and re-simulated up to the
+    /// [`ClientMain`](Self::ClientMain) world's tick with the updates that the server hasn't confirmed yet.
     ClientPrediction,
+    /// The client app's world, which the [`ClientMain`](Self::ClientMain) simulation is extracted into after it ticks.
+    ///
+    /// This is the world that is rendered.
+    ClientApp,
+    /// An internal buffer that a simulation thread extracts into after it ticks,
+    /// so that the app can extract the latest state without waiting for the simulation thread.
+    ///
+    /// Don't add presentation logic to this instance, it is not the app's world.
+    Snapshot,
 }
 
 impl SimulationInstance {
     pub(crate) fn format_tracing_str(self) -> &'static str {
         match self {
             SimulationInstance::Server => "Server",
+            SimulationInstance::ServerApp => "ServerApp",
             SimulationInstance::ClientMain => "ClientMain",
             SimulationInstance::ClientTemplate => "ClientTemplate",
             SimulationInstance::ClientPrediction => "ClientPrediction",
+            SimulationInstance::ClientApp => "ClientApp",
+            SimulationInstance::Snapshot => "Snapshot",
         }
+    }
+
+    /// Returns true if this instance executes the simulation.
+    ///
+    /// Other instances only receive simulation state through extraction.
+    pub fn steps(self) -> bool {
+        matches!(
+            self,
+            SimulationInstance::Server
+                | SimulationInstance::ClientMain
+                | SimulationInstance::ClientTemplate
+                | SimulationInstance::ClientPrediction
+        )
+    }
+
+    /// Returns true if this is an app's world rather than a separate simulation world.
+    pub fn is_app(self) -> bool {
+        matches!(
+            self,
+            SimulationInstance::ServerApp | SimulationInstance::ClientApp
+        )
     }
 }
 
 /// This plugin is added to all instances of the simulation.
 ///
-/// Controls the execution of the [SimulationUpdate] and [SimulationTime].
+/// Adds the simulation schedules, [`SimulationTime`] and the [`PredictionScheme`]'s plugin.
+/// Stepping instances are advanced with [`SimulationWorld::step`](world::SimulationWorld::step).
 pub(crate) struct SimulationPlugin<S> {
-    pub _p: PhantomData<S>,
-    pub schedule: Interned<dyn ScheduleLabel>,
-    pub instance: SimulationInstance,
+    _p: PhantomData<S>,
+    instance: SimulationInstance,
+}
+
+impl<S> SimulationPlugin<S> {
+    pub fn new(instance: SimulationInstance) -> Self {
+        SimulationPlugin {
+            _p: PhantomData,
+            instance,
+        }
+    }
 }
 
 impl<S> Plugin for SimulationPlugin<S>
@@ -147,10 +210,9 @@ where
         }
         app.init_resource::<Time<SimulationTime>>();
 
-        app.add_systems(
-            self.schedule,
-            run_simulation_schedule::<S>.in_set(StepSimulationSystems),
-        );
+        if let SimulationInstance::ClientPrediction = self.instance {
+            crate::client::prediction::build_prediction_world(app);
+        }
 
         app.add_plugins(S::plugin());
     }
@@ -161,32 +223,15 @@ where
     T: Send + Sync + 'static,
 {
     app.init_resource::<UpdateExecutionQueue<T>>();
+    app.add_systems(schedules::ResetSimulation, clear_update_queue::<T>);
 }
 
-/// Advances [SimulationTime] and the [SimulationUpdate].
-fn run_simulation_schedule<S>(world: &mut World)
+/// Removes queued updates when the simulation is reset, they belong to the previous simulation.
+fn clear_update_queue<T>(mut queue: ResMut<UpdateExecutionQueue<T>>)
 where
-    S: PredictionScheme,
+    T: Send + Sync + 'static,
 {
-    // Save the current generic time to replace it after overwriting it with `SimulationTime`.
-    let old_time = world.resource::<Time>().clone();
-
-    loop {
-        let simulation_time = world.resource::<Time<SimulationTime>>();
-
-        if simulation_time.current_tick() >= simulation_time.target_tick() {
-            break;
-        }
-
-        *world.resource_mut::<Time>() = simulation_time.as_generic();
-
-        world.run_schedule(SimulationMain);
-
-        // `SimulationTime` contains the timestamp of the *next* update, so we advance it after executing `SimulationUpdate`.
-        world.resource_mut::<Time<SimulationTime>>().step::<S>();
-    }
-
-    *world.resource_mut::<Time>() = old_time;
+    queue.clear();
 }
 
 impl SimulationTick {

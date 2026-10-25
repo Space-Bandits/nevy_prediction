@@ -12,12 +12,8 @@ pub fn build(app: &mut App) {
 #[derive(Component)]
 pub struct ServerEndpoint;
 
-fn spawn_endpoint(mut commands: Commands) -> Result {
-    let bind_port = std::env::args()
-        .nth(1)
-        .expect("Expected bind port as first argument")
-        .parse()
-        .expect("Invalid bind port format");
+fn spawn_endpoint(mut commands: Commands, config: Res<super::Config>) -> Result {
+    let bind_port = config.0.port;
 
     commands.spawn((
         ServerEndpoint,

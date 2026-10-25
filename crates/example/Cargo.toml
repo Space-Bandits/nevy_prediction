@@ -3,10 +3,15 @@ name = "example"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+# Profile with tracy, e.g. `cargo run -p example --release --features tracy --bin loadtest`
+tracy = ["bevy/trace_tracy"]
+
 [dependencies]
-bevy = { workspace = true, default-features = true, features = ["bevy_dev_tools"] }
+bevy = { workspace = true, default-features = true, features = ["bevy_dev_tools", "debug"] }
 nevy.workspace = true
 serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 rustls = { version = "0.23.5", default-features = false, features = ["std"] }
 rcgen = "0.13.1"
 
