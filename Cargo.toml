@@ -5,3 +5,7 @@ resolver = "2"
 [workspace.dependencies]
 bevy = { version = "0.19", default-features = false }
 nevy = "0.5"
+
+# Physics is far too slow to test without optimizing dependencies.
+[profile.dev.package."*"]
+opt-level = 3

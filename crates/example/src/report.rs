@@ -39,6 +39,9 @@ pub struct TruthLog {
     server: HashMap<(SimulationEntity, SimulationTick), Vec2>,
     /// The latest position each client had for each entity and tick.
     samples: HashMap<(usize, SimulationEntity, SimulationTick), ClientSample>,
+    server_props: HashMap<(SimulationEntity, SimulationTick), Vec3>,
+    /// The latest position each client had for each prop and tick.
+    client_props: HashMap<(usize, SimulationEntity, SimulationTick), Vec3>,
 }
 
 struct ClientSample {
@@ -61,6 +64,20 @@ impl TruthLog {
     ) {
         self.samples
             .insert((client, entity, tick), ClientSample { local, position });
+    }
+
+    pub fn record_server_prop(&mut self, entity: SimulationEntity, tick: SimulationTick, position: Vec3) {
+        self.server_props.insert((entity, tick), position);
+    }
+
+    pub fn record_client_prop(
+        &mut self,
+        client: usize,
+        entity: SimulationEntity,
+        tick: SimulationTick,
+        position: Vec3,
+    ) {
+        self.client_props.insert((client, entity, tick), position);
     }
 
     /// Compares every client sample with the server's position for the same entity and tick.
@@ -86,9 +103,20 @@ impl TruthLog {
             }
         }
 
+        let props = self
+            .client_props
+            .iter()
+            .filter(|&(&(sample_client, ..), _)| sample_client == client)
+            .filter_map(|(&(_, entity, tick), position)| {
+                let truth = self.server_props.get(&(entity, tick))?;
+                Some(position.distance(*truth))
+            })
+            .collect();
+
         PredictionErrors {
             local: ErrorStats::new(local),
             remote: ErrorStats::new(remote),
+            props: ErrorStats::new(props),
         }
     }
 }
@@ -100,6 +128,8 @@ pub struct PredictionErrors {
     pub local: ErrorStats,
     /// Other players, which mispredict until their inputs reach this client.
     pub remote: ErrorStats,
+    /// Physics props, which only mispredict if physics isn't deterministic across worlds.
+    pub props: ErrorStats,
 }
 
 #[derive(Clone, Debug, Default, Serialize)]
@@ -245,6 +275,10 @@ pub struct ServerReport {
     pub clients_joined: u32,
     /// Drones in the app's world at the end.
     pub drones: usize,
+    /// Props in the app's world at the end.
+    pub props: usize,
+    /// Props that ended up outside the arena, which only happens if they don't collide with its walls.
+    pub props_escaped: usize,
 }
 
 #[derive(Clone, Debug, Default, Serialize)]
@@ -266,8 +300,12 @@ pub struct ClientReport {
     pub prediction_length: Option<f32>,
     pub late_probes: u64,
     pub inputs_sent: u64,
+    /// Fraction of rays cast against the app's world that hit a prop or wall.
+    pub raycast_hits: f32,
     /// Drones in the app's world at the end.
     pub drones: usize,
+    /// Props in the app's world at the end.
+    pub props: usize,
     pub presentation: PresentationStats,
     pub errors: PredictionErrors,
 }

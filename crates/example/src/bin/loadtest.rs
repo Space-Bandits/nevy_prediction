@@ -2,6 +2,8 @@
 //!
 //! ```text
 //! loadtest [--clients 2] [--duration 10] [--port 27610] [--drones 0] [--drone-delay SECONDS]
+//!          [--props 0]                 avian rigid bodies bouncing around an arena
+//!          [--body-sync-ms 250]        how often the server corrects every body
 //!          [--server-cost-ms 0] [--client-cost-ms 0]
 //!          [--client-main-cost-ms N] [--client-template-cost-ms N] [--client-prediction-cost-ms N]
 //!          [--slow-client-cost-ms N]   extra cost for every world of client 0 only
@@ -31,6 +33,10 @@ fn main() {
     config.server.port = args.get_or("port", 27610);
     config.server.drones = args.get_or("drones", 0);
     config.server.drone_delay = args.seconds("drone-delay").unwrap_or_default();
+    config.server.props = args.get_or("props", 0);
+    config.server.body_sync_interval = args
+        .millis("body-sync-ms")
+        .unwrap_or(config.server.body_sync_interval);
     config.server.time_scale.enabled = !args.flag("no-time-scale");
     config.server.log = args.flag("log");
     config.client.log = false;

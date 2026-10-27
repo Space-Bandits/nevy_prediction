@@ -168,20 +168,23 @@ impl LoadtestSummary {
             server.limited_by_client * 100.
         );
         println!(
-            "  lag         max {:.0} ticks, skipped {:.0}ms, {} late updates, {} clients joined, {} drones",
+            "  lag         max {:.0} ticks, skipped {:.0}ms, {} late updates, {} clients joined, {} drones, {} props ({} escaped)",
             server.lag_ticks.max,
             server.skipped_ms,
             server.late_updates,
             server.clients_joined,
-            server.drones
+            server.drones,
+            server.props,
+            server.props_escaped
         );
 
         for client in &self.clients {
             println!(
-                "{}{}, {} drones",
+                "{}{}, {} drones, {} props",
                 client.name,
                 if client.connected { "" } else { " (never connected!)" },
-                client.drones
+                client.drones,
+                client.props
             );
             println!(
                 "  frames      mean {:6.2}ms  p50 {:6.2}ms  p99 {:6.2}ms  max {:6.2}ms",
@@ -235,6 +238,7 @@ impl LoadtestSummary {
             for (name, errors) in [
                 ("local", &client.errors.local),
                 ("remote", &client.errors.remote),
+                ("props", &client.errors.props),
             ] {
                 println!(
                     "  {:<6} err  {:5} samples, {:5.1}% mispredicted, mean {:.4} p99 {:.4} max {:.4}",

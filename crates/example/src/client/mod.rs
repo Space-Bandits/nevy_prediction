@@ -199,6 +199,8 @@ pub struct ClientRecorder {
     main_lag: Range,
     template_lag: Range,
     pub inputs_sent: u64,
+    pub raycasts: u64,
+    pub raycast_hits: u64,
     presentation: PresentationStats,
     holds: u64,
     jumps: u64,
@@ -259,6 +261,7 @@ fn exit_after_duration(
     stats: Res<ClientSimulationStats>,
     interval_stats: Res<PredictionIntervalStats>,
     drone_q: Query<(), With<crate::simulation::drones::Drone>>,
+    prop_q: Query<(), With<crate::simulation::props::Prop>>,
     mut exit: MessageWriter<AppExit>,
 ) {
     let Some(duration) = config.0.duration else {
@@ -289,7 +292,9 @@ fn exit_after_duration(
             prediction_length: stats.prediction_length,
             late_probes: interval_stats.late_probes,
             inputs_sent: recorder.inputs_sent,
+            raycast_hits: recorder.raycast_hits as f32 / recorder.raycasts.max(1) as f32,
             drones: drone_q.iter().count(),
+            props: prop_q.iter().count(),
             presentation: PresentationStats {
                 holds: recorder.holds as f32 / recorder.presentation.frames.max(1) as f32,
                 jumps: recorder.jumps as f32 / recorder.presentation.frames.max(1) as f32,

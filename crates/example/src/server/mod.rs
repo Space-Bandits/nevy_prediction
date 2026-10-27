@@ -16,6 +16,7 @@ use crate::{
         PhysicsScheme,
         drones::{Drone, SpawnDrones},
         player::{Player, PlayerState},
+        props::{Prop, PropState, SpawnProps, Wall},
         workload::{Workload, hash},
     },
 };
@@ -34,6 +35,10 @@ pub struct ServerConfig {
     /// The drones are queued at startup for a future tick, so clients that join before then
     /// only learn about them because queued updates are replayed to new clients.
     pub drone_delay: Duration,
+    /// Physics props bouncing around an arena.
+    pub props: u32,
+    /// How often bodies are corrected, see `RigidBodySyncSettings::interval`.
+    pub body_sync_interval: Duration,
     pub time_scale: TimeScaleSettings,
     pub execution: SimulationExecution,
     /// Minimum time between frames. The server busy loops if this is zero.
@@ -51,6 +56,8 @@ impl Default for ServerConfig {
             workload: default(),
             drones: 0,
             drone_delay: Duration::ZERO,
+            props: 0,
+            body_sync_interval: Duration::from_millis(250),
             time_scale: default(),
             execution: default(),
             frame_wait: Duration::from_millis(1),
@@ -84,6 +91,11 @@ pub fn build_server_app(config: ServerConfig) -> App {
     );
     app.include_protocol::<(), PredictionMessages>();
     app.insert_resource(config.time_scale.clone());
+    app.add_plugins(nevy_prediction_avian::prelude::RigidBodySyncPlugin);
+    app.insert_resource(nevy_prediction_avian::prelude::RigidBodySyncSettings {
+        interval: config.body_sync_interval,
+        ..default()
+    });
 
     networking::build(&mut app);
     player::build(&mut app);
@@ -93,10 +105,10 @@ pub fn build_server_app(config: ServerConfig) -> App {
     app.init_resource::<ServerRecorder>();
     app.insert_resource(Config(config));
 
-    app.add_systems(Startup, (configure_workload, spawn_drones));
+    app.add_systems(Startup, (configure_workload, spawn_drones, spawn_props));
     app.add_systems(
         Update,
-        init_drones
+        (init_drones, init_props)
             .in_set(ServerSimulationSystems::QueueUpdates)
             .before(player::spawn_players),
     );
@@ -156,6 +168,75 @@ fn spawn_drones(
     });
 }
 
+fn spawn_props(
+    config: Res<Config>,
+    mut allocator: ResMut<SimulationEntityAllocator>,
+    mut queue: ServerUpdateQueue<SpawnProps>,
+) {
+    if config.0.props == 0 {
+        return;
+    }
+
+    let spawn = SpawnProps::random(|| allocator.next(), config.0.props, 1);
+    queue.queue(WorldUpdate {
+        tick: SimulationTick(0),
+        update: spawn,
+    });
+}
+
+/// Sends existing props to new clients.
+///
+/// Their exact state is also sent by `RigidBodySyncPlugin`, but this has to spawn them first.
+fn init_props(
+    client_q: Query<Entity, Added<PredictionClient>>,
+    wall_q: Query<&SimulationEntity, With<Wall>>,
+    prop_q: Query<(
+        &SimulationEntity,
+        &Prop,
+        &avian3d::prelude::Position,
+        &avian3d::prelude::Rotation,
+        &avian3d::prelude::LinearVelocity,
+        &avian3d::prelude::AngularVelocity,
+    )>,
+    mut updates: WorldUpdateSender,
+) -> Result {
+    if client_q.is_empty() {
+        return Ok(());
+    }
+
+    let walls: Vec<_> = wall_q.iter().copied().collect();
+    let Ok(walls) = <[SimulationEntity; 6]>::try_from(walls) else {
+        return Ok(());
+    };
+
+    let props: Vec<_> = prop_q
+        .iter()
+        .map(
+            |(&entity, &prop, position, rotation, linear_velocity, angular_velocity)| PropState {
+                entity,
+                prop,
+                position: position.0,
+                rotation: rotation.0,
+                linear_velocity: linear_velocity.0,
+                angular_velocity: angular_velocity.0,
+            },
+        )
+        .collect();
+
+    for client_entity in &client_q {
+        updates.write_now(
+            client_entity,
+            true,
+            SpawnProps {
+                walls: Some(walls),
+                props: props.clone(),
+            },
+        )?;
+    }
+
+    Ok(())
+}
+
 /// Sends existing drones to new clients.
 fn init_drones(
     client_q: Query<Entity, Added<PredictionClient>>,
@@ -196,6 +277,7 @@ fn record_server(
     time: Res<Time<SimulationTime>>,
     new_client_q: Query<(), Added<PredictionClient>>,
     player_q: Query<(&SimulationEntity, &PlayerState), With<Player>>,
+    prop_q: Query<(&SimulationEntity, &avian3d::prelude::Position), With<Prop>>,
 ) {
     recorder.frames += 1;
     recorder.time_scale.record(stats.time_scale);
@@ -219,6 +301,9 @@ fn record_server(
         for (&entity, state) in &player_q {
             reports.truth.record_server(entity, tick, state.position);
         }
+        for (&entity, position) in &prop_q {
+            reports.truth.record_server_prop(entity, tick, position.0);
+        }
     }
 }
 
@@ -229,6 +314,7 @@ fn exit_after_duration(
     frames: Res<FrameRecorder>,
     stats: Res<ServerSimulationStats>,
     drone_q: Query<(), With<crate::simulation::drones::Drone>>,
+    prop_q: Query<&avian3d::prelude::Position, With<Prop>>,
     mut exit: MessageWriter<AppExit>,
 ) {
     let Some(duration) = config.0.duration else {
@@ -253,6 +339,13 @@ fn exit_after_duration(
             late_updates: stats.late_updates,
             clients_joined: recorder.clients_joined,
             drones: drone_q.iter().count(),
+            props: prop_q.iter().count(),
+            props_escaped: prop_q
+                .iter()
+                .filter(|position| {
+                    position.abs().max_element() > crate::simulation::props::ARENA_HALF_SIZE + 0.5
+                })
+                .count(),
         });
     }
 

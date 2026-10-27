@@ -1,4 +1,4 @@
-//! `server [port] [--tick-cost-ms N] [--drones N] [--inline] [--no-time-scale]`
+//! `server [port] [--tick-cost-ms N] [--drones N] [--props N] [--inline] [--no-time-scale]`
 
 use example::{
     args::Args,
@@ -22,6 +22,7 @@ fn main() {
         ..Default::default()
     };
     config.drones = args.get_or("drones", 0);
+    config.props = args.get_or("props", 0);
     config.time_scale.enabled = !args.flag("no-time-scale");
 
     if args.flag("inline") {

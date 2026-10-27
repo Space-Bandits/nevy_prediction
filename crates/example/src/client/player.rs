@@ -10,6 +10,7 @@ use crate::{
     },
     simulation::{
         drones::DroneState,
+        props::{ARENA_HALF_SIZE, Prop},
         player::{Player, PlayerInput, PlayerState, RequestMovePlayer, SetLocalPlayer},
         workload::{hash, unit},
     },
@@ -21,7 +22,7 @@ pub fn build(app: &mut App) {
         (
             set_local_player.before(ClientSimulationSystems::QueueUpdates),
             update_player_input.in_set(ClientSimulationSystems::QueueUpdates),
-            (record_players, update_render_history)
+            (record_players, update_render_history, cast_rays)
                 .after(SyncSimulationSystems),
         ),
     );
@@ -30,6 +31,10 @@ pub fn build(app: &mut App) {
         app.add_systems(
             Update,
             render.after(update_render_history),
+        );
+        app.add_systems(
+            PostUpdate,
+            render_props.after(nevy_prediction_avian::prelude::PhysicsPresentationSystems::Follow),
         );
     }
 }
@@ -142,6 +147,7 @@ fn record_players(
     mut last_tick: Local<Option<SimulationTick>>,
     local_player: Option<Res<LocalPlayer>>,
     player_q: Query<(&SimulationEntity, &PlayerState), With<Player>>,
+    prop_q: Query<(&SimulationEntity, &avian3d::prelude::Position), With<Prop>>,
 ) {
     let Some(sink) = &config.0.report else {
         return;
@@ -160,6 +166,11 @@ fn record_players(
         reports
             .truth
             .record_client(config.0.index, local, entity, tick, state.position);
+    }
+    for (&entity, position) in &prop_q {
+        reports
+            .truth
+            .record_client_prop(config.0.index, entity, tick, position.0);
     }
 }
 
@@ -241,5 +252,44 @@ fn render(
             0.1,
             ORANGE,
         );
+    }
+}
+
+/// Draws props where they were interpolated to.
+fn render_props(mut gizmos: Gizmos, prop_q: Query<(&Prop, &Transform)>) {
+    gizmos.cube(
+        Transform::from_scale(Vec3::splat(ARENA_HALF_SIZE * 2.)),
+        GRAY,
+    );
+
+    for (prop, transform) in &prop_q {
+        gizmos.cube(
+            transform.with_scale(Vec3::splat(prop.half_size * 2.)),
+            AQUA,
+        );
+    }
+}
+
+/// Casts a ray against the app's world, which never steps physics,
+/// to check that spatial queries see the extracted props and walls.
+fn cast_rays(
+    mut recorder: ResMut<ClientRecorder>,
+    spatial_query: avian3d::prelude::SpatialQuery,
+    wall_q: Query<(), With<crate::simulation::props::Wall>>,
+    time: Res<Time<Real>>,
+) {
+    if wall_q.is_empty() {
+        return;
+    }
+
+    let angle = time.elapsed_secs() * 3.;
+    let direction = Dir3::new(Vec3::new(angle.cos(), 0.3, angle.sin())).unwrap();
+
+    recorder.raycasts += 1;
+    if spatial_query
+        .cast_ray(Vec3::ZERO, direction, ARENA_HALF_SIZE * 4., true, &default())
+        .is_some()
+    {
+        recorder.raycast_hits += 1;
     }
 }

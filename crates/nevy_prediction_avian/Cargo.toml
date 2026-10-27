@@ -1,0 +1,12 @@
+[package]
+name = "nevy_prediction_avian"
+version = "0.1.0"
+edition = "2024"
+description = "Runs avian3d physics in nevy_prediction simulations"
+
+[dependencies]
+bevy.workspace = true
+nevy_prediction.path = "../nevy_prediction"
+# `collider-from-mesh` is a default feature, but it is relied on to make `Mesh` exist
+avian3d = { version = "0.7", features = ["serialize", "collider-from-mesh"] }
+serde = { version = "1.0", features = ["derive"] }

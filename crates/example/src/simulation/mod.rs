@@ -5,6 +5,7 @@ use nevy_prediction::prelude::*;
 
 pub mod drones;
 pub mod player;
+pub mod props;
 pub mod workload;
 
 pub struct PhysicsScheme;
@@ -23,7 +24,10 @@ pub struct SimulationPlugin;
 
 impl Plugin for SimulationPlugin {
     fn build(&self, app: &mut App) {
+        app.add_plugins(nevy_prediction_avian::NevyPredictionAvianPlugin::default());
+
         player::build(app);
+        props::build(app);
         drones::build(app);
         workload::build(app);
     }

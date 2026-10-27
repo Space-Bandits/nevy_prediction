@@ -207,3 +207,44 @@ fn inline_execution_matches_the_server() {
         assert_healthy(client);
     }
 }
+
+#[test]
+fn physics_props_match_the_server() {
+    const PROPS: u32 = 40;
+
+    let summary = run(27707, |config| {
+        config.clients = 2;
+        config.duration = Duration::from_secs(8);
+        config.server.props = PROPS;
+    });
+
+    assert_eq!(summary.server.props, PROPS as usize);
+    assert_eq!(summary.server.props_escaped, 0, "props aren't colliding with the walls");
+
+    for client in &summary.clients {
+        assert_healthy(client);
+        assert_eq!(client.props, PROPS as usize, "{} is missing props", client.name);
+        // every ray from the middle of the arena hits a wall, if not a prop
+        assert!(
+            client.raycast_hits > 0.99,
+            "only {} of {}'s rays hit anything",
+            client.raycast_hits,
+            client.name
+        );
+
+        let props = &client.errors.props;
+        assert!(
+            props.samples > 1000,
+            "{} recorded too few prop samples: {}",
+            client.name,
+            props.samples
+        );
+        // Contacts don't simulate exactly the same in every world, but corrections keep them close.
+        assert!(
+            props.p99 < 0.25,
+            "{}'s props diverged from the server by {} at p99",
+            client.name,
+            props.p99
+        );
+    }
+}
