@@ -2,8 +2,8 @@
 //!
 //! The [`Workload`] resource lives in each simulation world and isn't extracted,
 //! so every world can be given a different cost.
-//! Apps insert it with [`ClientSimulation::run_on_main`](nevy_prediction::prelude::ClientSimulation::run_on_main)
-//! and friends, or [`ServerSimulation::run_on_world`](nevy_prediction::prelude::ServerSimulation::run_on_world).
+//! The client inserts it with [`ClientSimulation::run_on_main`](nevy_prediction::prelude::ClientSimulation::run_on_main)
+//! and friends, and the server inserts it into its own world, which is the server's simulation.
 
 use std::time::Duration;
 

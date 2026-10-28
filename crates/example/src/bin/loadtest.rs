@@ -81,7 +81,6 @@ fn main() {
         .unwrap_or(config.client.prediction_interval);
 
     if args.flag("inline") {
-        config.server.execution = SimulationExecution::Inline;
         config.client.execution = SimulationExecution::Inline;
     }
 

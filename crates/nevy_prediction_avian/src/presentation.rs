@@ -1,6 +1,6 @@
-//! Physics in the app's world, which never steps the simulation.
+//! Physics in the client app's world, which never steps the simulation.
 //!
-//! After every extraction into an app's world:
+//! After every extraction into the client app's world:
 //!
 //! - The parts of avian that keep [`SpatialQuery`] and collider hierarchies current run in [`PresentationPhysics`].
 //!   They use the latest extracted state, which is up to a tick ahead of what the client presents.

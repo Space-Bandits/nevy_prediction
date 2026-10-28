@@ -36,17 +36,16 @@ impl AddWorldUpdate for App {
         let instance = *self.world().resource::<SimulationInstance>();
 
         match instance {
-            SimulationInstance::Server
-            | SimulationInstance::ClientMain
-            | SimulationInstance::ClientTemplate => {
+            SimulationInstance::Server => {
+                crate::common::simulation::build_update::<T>(self);
+                crate::common::build_update::<T>(self);
+            }
+            SimulationInstance::ClientMain | SimulationInstance::ClientTemplate => {
                 crate::common::simulation::build_update::<T>(self);
             }
             SimulationInstance::ClientPrediction => {
                 crate::common::simulation::build_update::<T>(self);
                 crate::client::prediction::build_update::<T>(self);
-            }
-            SimulationInstance::ServerApp => {
-                crate::common::build_update::<T>(self);
             }
             SimulationInstance::ClientApp => {
                 crate::client::build_update::<T>(self);

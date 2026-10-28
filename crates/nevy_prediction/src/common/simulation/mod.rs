@@ -1,8 +1,8 @@
 //! This module contains logic that controls the execution of a simulation instance.
 //!
 //! It adds a [`SimulationTime`] clock which is the generic [`Time`] resource for the [`SimulationUpdate`] schedule.
-//! This schedule is run on a fixed timestep with [`SimulationTime`] in separate simulation worlds,
-//! which are stepped on simulation threads.
+//! This schedule is run on a fixed timestep with [`SimulationTime`],
+//! in the server app's world and in the client's simulation worlds, which are stepped on simulation threads.
 //!
 //! It also controls when [`WorldUpdate`]s are applied with a [`WorldUpdateQueue`].
 //!
@@ -84,9 +84,10 @@ pub struct SimulationTime {
 
 /// System set in the app where the app synchronizes with the simulation.
 ///
-/// The simulation itself runs asynchronously to the app on separate threads.
-/// In this set the latest simulation state is extracted into the app's world,
-/// and [`Time<PredictionTime>`](crate::common::time::PredictionTime) is advanced.
+/// On the server the simulation is stepped in this set, in the app's own world.
+/// On the client the simulation runs asynchronously to the app on separate threads,
+/// and in this set its latest state is extracted into the app's world.
+/// Both advance [`Time<PredictionTime>`](crate::common::time::PredictionTime) here.
 ///
 /// Order systems that read the simulation state after this set.
 #[derive(SystemSet, Clone, Copy, Default, Debug, PartialEq, Eq, Hash)]
@@ -97,14 +98,13 @@ pub struct SyncSimulationSystems;
 /// This should not change the behavior of the simulation,
 /// but is useful for debugging and inserting different resources when building plugins based on where the simulation is running.
 ///
-/// The simulation is only executed in [stepping](Self::steps) instances, which each have their own world on a simulation thread.
+/// The simulation is only executed in [stepping](Self::steps) instances.
+/// The server's is the server app's world, and the client's each have their own world on a simulation thread.
 /// The other instances only receive simulation state through the [`ExtractSimulation`] schedule.
 #[derive(Resource, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum SimulationInstance {
-    /// The authoritative simulation on the server.
+    /// The authoritative simulation, which is the server app's world.
     Server,
-    /// The server app's world, which the [`Server`](Self::Server) simulation is extracted into after it ticks.
-    ServerApp,
     /// The client's local simulation, which runs ahead of the server by the prediction interval.
     ///
     /// It is stepped on its own, and has the [`ClientPrediction`](Self::ClientPrediction) world
@@ -130,7 +130,6 @@ impl SimulationInstance {
     pub(crate) fn format_tracing_str(self) -> &'static str {
         match self {
             SimulationInstance::Server => "Server",
-            SimulationInstance::ServerApp => "ServerApp",
             SimulationInstance::ClientMain => "ClientMain",
             SimulationInstance::ClientTemplate => "ClientTemplate",
             SimulationInstance::ClientPrediction => "ClientPrediction",
@@ -152,12 +151,11 @@ impl SimulationInstance {
         )
     }
 
-    /// Returns true if this is an app's world rather than a separate simulation world.
+    /// Returns true if this is an app's world that the simulation is extracted into.
+    ///
+    /// The server app's world is not one, it is the [`Server`](Self::Server) simulation itself.
     pub fn is_app(self) -> bool {
-        matches!(
-            self,
-            SimulationInstance::ServerApp | SimulationInstance::ClientApp
-        )
+        matches!(self, SimulationInstance::ClientApp)
     }
 }
 

@@ -199,7 +199,6 @@ fn inline_execution_matches_the_server() {
     let summary = run(27706, |config| {
         config.clients = 2;
         config.duration = Duration::from_secs(5);
-        config.server.execution = SimulationExecution::Inline;
         config.client.execution = SimulationExecution::Inline;
     });
 

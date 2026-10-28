@@ -40,7 +40,6 @@ pub struct ServerConfig {
     /// How often bodies are corrected, see `RigidBodySyncSettings::interval`.
     pub body_sync_interval: Duration,
     pub time_scale: TimeScaleSettings,
-    pub execution: SimulationExecution,
     /// Minimum time between frames. The server busy loops if this is zero.
     pub frame_wait: Duration,
     /// Exit after this long.
@@ -59,7 +58,6 @@ impl Default for ServerConfig {
             props: 0,
             body_sync_interval: Duration::from_millis(250),
             time_scale: default(),
-            execution: default(),
             frame_wait: Duration::from_millis(1),
             duration: None,
             report: None,
@@ -86,9 +84,7 @@ pub fn build_server_app(config: ServerConfig) -> App {
 
     crate::build(&mut app);
 
-    app.add_plugins(
-        NevyPredictionServerPlugin::<PhysicsScheme>::new(Update).with_execution(config.execution),
-    );
+    app.add_plugins(NevyPredictionServerPlugin::<PhysicsScheme>::new(Update));
     app.include_protocol::<(), PredictionMessages>();
     app.insert_resource(config.time_scale.clone());
     app.add_plugins(nevy_prediction_avian::prelude::RigidBodySyncPlugin);
@@ -133,11 +129,8 @@ impl SimulationEntityAllocator {
     }
 }
 
-fn configure_workload(config: Res<Config>, simulation: Res<ServerSimulation>) {
-    let workload = config.0.workload;
-    simulation.run_on_world(move |world| {
-        world.insert_resource(workload);
-    });
+fn configure_workload(mut commands: Commands, config: Res<Config>) {
+    commands.insert_resource(config.0.workload);
 }
 
 fn spawn_drones(
@@ -161,7 +154,7 @@ fn spawn_drones(
     let delay = config.0.drone_delay.as_secs_f64() / PhysicsScheme::step_interval().as_secs_f64();
 
     // No clients exist yet, so this only needs to be queued.
-    // Clients that join before it reaches the app's world have it replayed to them.
+    // Clients that join before it is applied have it replayed to them.
     queue.queue(WorldUpdate {
         tick: SimulationTick(delay.ceil() as u32),
         update: SpawnDrones { drones },

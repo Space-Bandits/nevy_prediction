@@ -17,7 +17,7 @@ use nevy::prelude::*;
 
 use crate::{
     common::{SimulationCapacity, simulation::SyncSimulationSystems},
-    server::{PredictionClient, ServerSimulationSystems, pipeline::ServerSimulation},
+    server::{PredictionClient, ServerSimulationSystems, stepping::ServerSimulation},
 };
 
 pub(crate) fn build(app: &mut App, schedule: Interned<dyn ScheduleLabel>) {
@@ -122,7 +122,7 @@ fn receive_capacities(
 pub(crate) fn update_time_scale(
     settings: Res<TimeScaleSettings>,
     mut time_scale: ResMut<ServerTimeScale>,
-    simulation: Res<ServerSimulation>,
+    mut simulation: ResMut<ServerSimulation>,
     client_q: Query<(Entity, &ClientSimulationCapacity), With<PredictionClient>>,
     real_time: Res<Time<Real>>,
 ) {

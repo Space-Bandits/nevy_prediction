@@ -77,22 +77,7 @@ impl SimulationWorld {
     where
         S: PredictionScheme,
     {
-        let world = &mut self.world;
-
-        let mut time = world.resource_mut::<Time<SimulationTime>>();
-        time.clear_target();
-        time.queue_ticks(1);
-
-        // Save the current generic time to replace it after overwriting it with `SimulationTime`.
-        let old_time = *world.resource::<Time>();
-        *world.resource_mut::<Time>() = world.resource::<Time<SimulationTime>>().as_generic();
-
-        world.run_schedule(SimulationMain);
-
-        // `SimulationTime` contains the timestamp of the *next* update, so we advance it after executing `SimulationUpdate`.
-        world.resource_mut::<Time<SimulationTime>>().step::<S>();
-
-        *world.resource_mut::<Time>() = old_time;
+        step_world::<S>(&mut self.world);
     }
 
     /// Sets the [`SimulationTime`] to a tick and runs the [`ResetSimulation`] schedule.
@@ -117,6 +102,27 @@ impl SimulationWorld {
 
         self.scratch = Some(std::mem::replace(&mut self.world, source_world));
     }
+}
+
+/// Executes a single tick of the simulation in a world.
+pub(crate) fn step_world<S>(world: &mut World)
+where
+    S: PredictionScheme,
+{
+    let mut time = world.resource_mut::<Time<SimulationTime>>();
+    time.clear_target();
+    time.queue_ticks(1);
+
+    // Save the current generic time to replace it after overwriting it with `SimulationTime`.
+    let old_time = *world.resource::<Time>();
+    *world.resource_mut::<Time>() = world.resource::<Time<SimulationTime>>().as_generic();
+
+    world.run_schedule(SimulationMain);
+
+    // `SimulationTime` contains the timestamp of the *next* update, so we advance it after executing `SimulationUpdate`.
+    world.resource_mut::<Time<SimulationTime>>().step::<S>();
+
+    *world.resource_mut::<Time>() = old_time;
 }
 
 /// Sets the [`SimulationTime`] of a world to a tick and runs the [`ResetSimulation`] schedule.

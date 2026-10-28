@@ -4,12 +4,13 @@
 //! It is built into every world of the simulation and decides what to do in each one
 //! from its [`SimulationInstance`]:
 //!
-//! - **Stepping worlds** (the server and the client's main, template and prediction worlds)
+//! - **Stepping worlds** (the server app's world and the client's main, template and prediction worlds)
 //!   run the full [`PhysicsPlugins`] in [`SimulationUpdate`].
-//! - **App worlds** never step physics. After every extraction they update the collider trees,
+//!   On the server that means game logic can use [`SpatialQuery`] and read bodies directly.
+//! - **The client app's world** never steps physics. After every extraction it updates the collider trees,
 //!   so [`SpatialQuery`] and the hierarchy components like [`ColliderOf`] work against the latest state,
-//!   and write [`Position`] and [`Rotation`] into [`Transform`].
-//!   The client app also interpolates bodies between the latest two ticks, see [`presentation`].
+//!   writes [`Position`] and [`Rotation`] into [`Transform`],
+//!   and interpolates bodies between the latest two ticks, see [`presentation`].
 //! - **Snapshots** only carry the extracted state.
 //!
 //! # What crosses worlds

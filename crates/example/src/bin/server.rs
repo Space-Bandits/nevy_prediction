@@ -1,11 +1,10 @@
-//! `server [port] [--tick-cost-ms N] [--drones N] [--props N] [--inline] [--no-time-scale]`
+//! `server [port] [--tick-cost-ms N] [--drones N] [--props N] [--no-time-scale]`
 
 use example::{
     args::Args,
     server::{ServerConfig, build_server_app},
     simulation::workload::Workload,
 };
-use nevy_prediction::prelude::*;
 
 fn main() {
     let args = Args::from_env();
@@ -24,10 +23,6 @@ fn main() {
     config.drones = args.get_or("drones", 0);
     config.props = args.get_or("props", 0);
     config.time_scale.enabled = !args.flag("no-time-scale");
-
-    if args.flag("inline") {
-        config.execution = SimulationExecution::Inline;
-    }
 
     build_server_app(config).run();
 }
